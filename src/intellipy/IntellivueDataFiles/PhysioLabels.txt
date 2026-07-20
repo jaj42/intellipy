@@ -4676,3 +4676,13 @@ Label:
 NLS_VUELINK_FLX1_NPS_TEXT_WAVE8 0x80AAF00F
 Observed Value:
 depends on configuration
+EctSta ECG Ectopic Status
+Label:
+NLS_NOM_ECG_STAT_ECT 0x0002D006
+Observed Value:
+NOM_ECG_STAT_ECT 0xD006
+RytSta ECG Rhythm Status
+Label:
+NLS_NOM_ECG_STAT_RHY 0x0002D007
+Observed Value:
+NOM_ECG_STAT_RHY 0xD007

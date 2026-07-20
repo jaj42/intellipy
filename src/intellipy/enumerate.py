@@ -19,15 +19,21 @@ attribute                    OID     meaning
 
 One class is polled per signal kind:
 
-=========  ==============================  ===
-kind       object class                    OID
-=========  ==============================  ===
-numeric    ``NOM_MOC_VMO_METRIC_NU``       6
-wave       ``NOM_MOC_VMO_METRIC_SA_RT``    9
-alarm      ``NOM_MOC_VMO_AL_MON``          54
-=========  ==============================  ===
+===========  ==============================  ===
+kind         object class                    OID
+===========  ==============================  ===
+numeric      ``NOM_MOC_VMO_METRIC_NU``       6
+wave         ``NOM_MOC_VMO_METRIC_SA_RT``    9
+alarm        ``NOM_MOC_VMO_AL_MON``          54
+enumeration  ``NOM_MOC_VMO_METRIC_ENUM``     5
+===========  ==============================  ===
 
 Collecting the objects from the first full poll cycle *is* the enumeration.
+
+Enumeration objects report a *state* rather than a number ("Sinus Rhythm",
+"pair PVC's"). The monitor only answers polls against them when the client
+asked for ``POLL_EXT_ENUM`` at association time; otherwise that one poll comes
+back as a Remote Operation Error and the other classes enumerate as usual.
 
 The collection routine is transport-agnostic: :func:`collect_enumeration` takes
 ``send``/``recv`` callables, so an offline pcap replay and a live socket run
@@ -69,7 +75,13 @@ CLASS_POLLS = {
     "NOM_MOC_VMO_METRIC_NU": ("MDSExtendedPollActionNUMERIC", "numeric"),
     "NOM_MOC_VMO_METRIC_SA_RT": ("MDSExtendedPollActionWAVE", "wave"),
     "NOM_MOC_VMO_AL_MON": ("MDSExtendedPollActionALARM", "alarm"),
+    "NOM_MOC_VMO_METRIC_ENUM": ("MDSExtendedPollActionENUM", "enumeration"),
 }
+
+#: A poll the monitor declines, e.g. an enumeration poll on an association that
+#: did not negotiate ``POLL_EXT_ENUM``. It names no object class, so a refused
+#: class can only be counted, not identified.
+ERROR_REPLY_TYPE = "RemoteOperationError"
 
 
 @dataclass
@@ -79,8 +91,8 @@ class Signal:
     Attributes
     ----------
     kind : str
-        ``"numeric"``, ``"wave"``, ``"alarm"`` or ``"unknown"``, derived from
-        `oid_class`.
+        ``"numeric"``, ``"wave"``, ``"alarm"``, ``"enumeration"`` or
+        ``"unknown"``, derived from `oid_class`.
     oid_class : str
         Object class the signal was polled from, e.g. ``NOM_MOC_VMO_METRIC_NU``.
     mds_context : int
@@ -283,9 +295,10 @@ def collect_enumeration(send, recv, codec, classes=None, timeout=5.0):
 
     inventory = {}
     pending = set(classes)
+    refused = 0
     deadline = time.monotonic() + timeout
 
-    while pending and time.monotonic() < deadline:
+    while len(pending) > refused and time.monotonic() < deadline:
         try:
             data = recv()
         except (OSError, TimeoutError):
@@ -294,6 +307,12 @@ def collect_enumeration(send, recv, codec, classes=None, timeout=5.0):
             continue
 
         message_type = codec.getMessageType(data)
+        if message_type == ERROR_REPLY_TYPE:
+            # One poll will never be answered; stop waiting on one class. Which
+            # one is unknowable from the error, so this only ends the loop once
+            # every still-pending class has been accounted for.
+            refused += 1
+            continue
         if message_type not in POLL_REPLY_TYPES:
             continue
         try:

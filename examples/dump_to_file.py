@@ -7,7 +7,7 @@ arrives to disk until the run is over.
 
     uv run python examples/dump_to_file.py --duration 60 --wave Pleth --wave ECG
 
-Three files are produced in ``--outdir``:
+Five files are produced in ``--outdir``:
 
 ``numerics.csv``
     One row per numeric value: ``time,label,handle,value,unit``.
@@ -15,6 +15,15 @@ Three files are produced in ``--outdir``:
 ``waves.jsonl``
     One JSON object per waveform block, keeping the block's own time and
     sample lists so nothing is resampled or interpolated on the way in.
+
+``alarms.jsonl``
+    One JSON object per active alarm, patient and technical.
+
+``enumerations.jsonl``
+    One JSON object per enumeration state -- ECG rhythm and ectopic status.
+    These report a code rather than a number, so they do not fit the numeric
+    CSV. Empty unless the monitor granted ``POLL_EXT_ENUM`` at association
+    time (revision E.0 and later); check ``client.granted_poll_options``.
 
 ``demographics.json``
     The patient record, written separately so that identifiers stay out of
@@ -37,7 +46,8 @@ from intellipy.client import IntellivueClient
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(
-        description="Record IntelliVue numerics, waveforms and alarms to files.",
+        description="Record IntelliVue numerics, waveforms, alarms and "
+                    "enumeration states to files.",
     )
     parser.add_argument(
         "--transport", choices=("udp", "rs232"), default="udp",
@@ -130,7 +140,7 @@ class Recorder:
     def __init__(self, outdir):
         os.makedirs(outdir, exist_ok=True)
         self.outdir = outdir
-        self.counts = {"numeric": 0, "wave": 0, "alarm": 0}
+        self.counts = {"numeric": 0, "wave": 0, "alarm": 0, "enumeration": 0}
 
         self._numeric_file = open(
             os.path.join(outdir, "numerics.csv"), "w", newline="", encoding="utf-8"
@@ -145,6 +155,11 @@ class Recorder:
         )
         self._alarms = open(
             os.path.join(outdir, "alarms.jsonl"), "w", encoding="utf-8"
+        )
+        # Enumeration objects report states (ECG rhythm, ectopic status)
+        # rather than numbers, so they get their own stream.
+        self._enums = open(
+            os.path.join(outdir, "enumerations.jsonl"), "w", encoding="utf-8"
         )
 
     def __enter__(self):
@@ -163,6 +178,8 @@ class Recorder:
             self._write_json(self._waves, sample)
         elif kind == "alarm":
             self._write_json(self._alarms, sample)
+        elif kind == "enumeration":
+            self._write_json(self._enums, sample)
         else:
             return
         self.counts[kind] += 1
@@ -187,7 +204,7 @@ class Recorder:
         stream.flush()
 
     def close(self):
-        for stream in (self._numeric_file, self._waves, self._alarms):
+        for stream in (self._numeric_file, self._waves, self._alarms, self._enums):
             stream.close()
 
 
@@ -234,7 +251,8 @@ def main(argv=None):
                 "\nrecorded "
                 f"{recorder.counts['numeric']} numeric values, "
                 f"{recorder.counts['wave']} waveform blocks, "
-                f"{recorder.counts['alarm']} alarms "
+                f"{recorder.counts['alarm']} alarms, "
+                f"{recorder.counts['enumeration']} enumeration states "
                 f"into {args.outdir}/"
             )
 

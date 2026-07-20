@@ -21,14 +21,17 @@ threading and storage to the caller.
 Samples are plain dicts, using the schema the queue-based consumers of the
 original project already expect:
 
-==========  ================================================================
-kind        keys
-==========  ================================================================
-``numeric`` ``kind``, ``label``, ``handle``, ``time``, ``value``, ``unit``
-``wave``    ``kind``, ``label``, ``handle``, ``time`` (list), ``wave`` (list)
-``alarm``   ``kind``, ``label``, ``handle``, ``time``, ``code``, ``source``,
-            ``alarm_type``, ``state``, ``text``
-==========  ================================================================
+=============== =============================================================
+kind            keys
+=============== =============================================================
+``numeric``     ``kind``, ``label``, ``handle``, ``time``, ``value``, ``unit``
+``wave``        ``kind``, ``label``, ``handle``, ``time`` (list), ``wave``
+                (list)
+``alarm``       ``kind``, ``label``, ``handle``, ``time``, ``code``,
+                ``source``, ``alarm_type``, ``state``, ``text``
+``enumeration`` ``kind``, ``label``, ``handle``, ``time``, ``state``,
+                ``physio_id``, ``value``, ``unit``, ``measurement_state``
+=============== =============================================================
 
 Times are seconds elapsed since the association's relative time origin.
 
@@ -66,7 +69,13 @@ STREAM_POLLS = (
     ("NOM_MOC_VMO_METRIC_NU", "MDSExtendedPollActionNUMERIC"),
     ("NOM_MOC_VMO_METRIC_SA_RT", "MDSExtendedPollActionWAVE"),
     ("NOM_MOC_VMO_AL_MON", "MDSExtendedPollActionALARM"),
+    ("NOM_MOC_VMO_METRIC_ENUM", "MDSExtendedPollActionENUM"),
 )
+
+#: Poll profile extension options requested at association time. The monitor
+#: only serves enumeration objects when ``POLL_EXT_ENUM`` is among them.
+POLL_PROFILE_WITH_ENUM = "POLL1SECANDWAVEANDENUMANDLISTANDDYN"
+POLL_PROFILE_WITHOUT_ENUM = "POLL1SECANDWAVEANDLISTANDDYN"
 
 #: Seconds of margin subtracted from the negotiated keep-alive period.
 KEEP_ALIVE_MARGIN = 5.0
@@ -111,6 +120,52 @@ def _scale_factors(scale_range_spec):
     a = (upper - lower) / x_range
     b = lower - a * scale_range_spec["lower_scaled_value"]
     return a, b
+
+
+#: ``PollProfileExtOptions`` bit values, per the Data Export spec.
+POLL_PROFILE_EXT_BITS = {
+    "POLL_EXT_PERIOD_NU_1SEC": 0x80000000,
+    "POLL_EXT_PERIOD_NU_AVG_12SEC": 0x40000000,
+    "POLL_EXT_PERIOD_NU_AVG_60SEC": 0x20000000,
+    "POLL_EXT_PERIOD_NU_AVG_300SEC": 0x10000000,
+    "POLL_EXT_PERIOD_RTSA": 0x08000000,
+    "POLL_EXT_ENUM": 0x04000000,
+    "POLL_EXT_NU_PRIO_LIST": 0x02000000,
+    "POLL_EXT_DYN_MODALITIES": 0x01000000,
+}
+
+
+def _granted_poll_options(poll_profile_support):
+    """Names of the poll profile extension options the monitor accepted.
+
+    The monitor echoes a bit field, not the combination that was asked for, so
+    the request and the grant have to be compared bit by bit. A monitor that
+    offers no extension package at all grants nothing.
+
+    Parameters
+    ----------
+    poll_profile_support: dict
+        The ``PollProfileSupport`` value from the association response.
+
+    Returns
+    -------
+    set of str
+
+    """
+    packages = poll_profile_support.get(
+        "PollProfileSupport_optional_packages", {}
+    ).get("AttributeList", {})
+    extension = _attribute_value(packages, "NOM_ATTR_POLL_PROFILE_EXT").get(
+        "PollProfileExt", {}
+    )
+    if not isinstance(extension, dict):
+        return set()
+
+    options = extension.get("PollProfileExtOptions", 0)
+    if not isinstance(options, int):
+        return set()
+
+    return {name for name, bit in POLL_PROFILE_EXT_BITS.items() if options & bit}
 
 
 def _demog_string(attributes, name):
@@ -216,11 +271,23 @@ class IntellivueClient:
         Seconds any single `receive` may block. Bounds the enumeration and
         streaming loops so they cannot hang on a silent monitor.
 
+    request_enumerations: bool
+        Ask for the ``POLL_EXT_ENUM`` option at association time, without which
+        the monitor serves no enumeration objects (ECG rhythm and ectopic
+        status). Harmless on monitors that do not support them: they simply
+        clear the bit in their association response. Enumeration objects need
+        software revision E.0 or later.
+
     Attributes
     ----------
     keep_alive_time: float
         Longest silence the monitor tolerates, in seconds, negotiated in the
         association response.
+
+    granted_poll_options: set of str
+        Poll profile extension options the monitor accepted, as ``POLL_EXT_*``
+        names. ``"POLL_EXT_ENUM"`` in this set means enumeration objects can be
+        polled.
 
     initial_time: dict
         Absolute wall-clock time reported by the monitor at association.
@@ -238,9 +305,11 @@ class IntellivueClient:
         portNumber=24005,
         timeout=5.0,
         device=None,
+        request_enumerations=True,
     ):
         self.transport = transport
         self.timeout = timeout
+        self.request_enumerations = request_enumerations
         self.codec = IntellivueData()
 
         if transport == "udp":
@@ -262,12 +331,14 @@ class IntellivueClient:
         self.keep_alive_time = 0.0
         self.initial_time = None
         self.relative_initial_time = 0
+        self.granted_poll_options = set()
 
         # Object metadata (label, and for waves the sampling rate and scaling)
         # arrives once, in the first poll cycle; later cycles carry bare values.
         # Cache it by handle so those can still be decoded and labelled.
         self._wave_info = {}
         self._numeric_labels = {}
+        self._enum_labels = {}
 
     # -- connection lifecycle ------------------------------------------------
 
@@ -287,6 +358,9 @@ class IntellivueClient:
         Both paths then expect an association response followed by an MDS
         create event, which must be acknowledged.
 
+        The monitor answers with the subset of the requested poll profile
+        options it will actually honour; see :attr:`granted_poll_options`.
+
         Returns
         -------
         bool
@@ -301,7 +375,16 @@ class IntellivueClient:
         if self.transport == "udp":
             self._await_connect_indication()
 
-        self.socket.send(self.codec.writeData("AssociationRequest"))
+        self.socket.send(
+            self.codec.writeData(
+                "AssociationRequest",
+                {
+                    "PollProfileExtOptions": POLL_PROFILE_WITH_ENUM
+                    if self.request_enumerations
+                    else POLL_PROFILE_WITHOUT_ENUM
+                },
+            )
+        )
         self._complete_association()
         self.associated = True
         return True
@@ -347,14 +430,15 @@ class IntellivueClient:
 
             if message_type == "AssociationResponse":
                 response = self.codec.readData(message)
+                profile = response["AssocRespUserData"]["MDSEUserInfoStd"][
+                    "supported_aprofiles"
+                ]["AttributeList"]["AVAType"]["NOM_POLL_PROFILE_SUPPORT"][
+                    "AttributeValue"
+                ]["PollProfileSupport"]
                 self.keep_alive_time = (
-                    response["AssocRespUserData"]["MDSEUserInfoStd"][
-                        "supported_aprofiles"
-                    ]["AttributeList"]["AVAType"]["NOM_POLL_PROFILE_SUPPORT"][
-                        "AttributeValue"
-                    ]["PollProfileSupport"]["min_poll_period"]["RelativeTime"]
-                    / TICKS_PER_SECOND
+                    profile["min_poll_period"]["RelativeTime"] / TICKS_PER_SECOND
                 )
+                self.granted_poll_options = _granted_poll_options(profile)
 
             elif message_type == "MDSCreateEvent":
                 create_event, parameters = self.codec.readData(message)
@@ -616,7 +700,7 @@ class IntellivueClient:
                 last_sent = time.monotonic()
 
     def stream_to_queues(self, numeric_queue=None, wave_queue=None, alarm_queue=None,
-                         duration=None):
+                         duration=None, enum_queue=None):
         """Run :meth:`stream` and fan samples out into queues by kind.
 
         Blocks until the stream ends. Run it in a thread to feed the
@@ -626,7 +710,7 @@ class IntellivueClient:
 
         Parameters
         ----------
-        numeric_queue, wave_queue, alarm_queue: queue.Queue, optional
+        numeric_queue, wave_queue, alarm_queue, enum_queue: queue.Queue, optional
             Destinations per sample kind. Samples whose queue is None are
             dropped.
 
@@ -638,6 +722,7 @@ class IntellivueClient:
             "numeric": numeric_queue,
             "wave": wave_queue,
             "alarm": alarm_queue,
+            "enumeration": enum_queue,
         }
         try:
             for sample in self.stream(duration=duration):
@@ -668,6 +753,7 @@ class IntellivueClient:
             "NOM_MOC_VMO_METRIC_NU": self._parse_numerics,
             "NOM_MOC_VMO_METRIC_SA_RT": self._parse_waves,
             "NOM_MOC_VMO_AL_MON": self._parse_alarms,
+            "NOM_MOC_VMO_METRIC_ENUM": self._parse_enumerations,
         }
         parser = parsers.get(oid_class)
         if parser is None:
@@ -813,6 +899,48 @@ class IntellivueClient:
                 yield self._wave_sample(
                     handle, str(value.get("SCADAType")), list(values), timestamp
                 )
+
+    def _parse_enumerations(self, observation, timestamp):
+        """Yield the state of one enumeration object.
+
+        Enumeration objects report a code rather than a number -- the ECG
+        rhythm and ectopic status the monitor is currently showing. The value
+        is a union: usually just the state's nomenclature code, but it may come
+        with a measured number and unit, which are passed through as `value`
+        and `unit` so the sample stays comparable with a numeric one.
+        """
+        attributes = observation.get("AttributeList", {})
+        handle = observation.get("Handle")
+
+        # As for numerics, only the first poll cycle names the object.
+        label = _attribute_value(attributes, "NOM_ATTR_ID_LABEL").get("TextId")
+        if label:
+            self._enum_labels[handle] = label
+        else:
+            label = self._enum_labels.get(handle)
+
+        enum_value = _attribute_value(attributes, "NOM_ATTR_VAL_ENUM_OBS").get(
+            "EnumObsVal"
+        )
+        if not isinstance(enum_value, dict):
+            return
+
+        union = enum_value.get("EnumVal", {})
+        measured = union.get("EnumObjIdVal", {})
+        state = union.get("enum_obj_id", measured.get("enum_obj_id"))
+
+        yield {
+            "kind": "enumeration",
+            "label": str(label),
+            "handle": handle,
+            "time": timestamp,
+            # The state the enumeration is in, e.g. NOM_ECG_SINUS_RHY.
+            "state": state,
+            "physio_id": enum_value.get("physio_id"),
+            "value": measured.get("FLOATType"),
+            "unit": measured.get("UNITType"),
+            "measurement_state": enum_value.get("MeasurementState"),
+        }
 
     def _parse_alarms(self, observation, timestamp):
         """Yield one sample per active alarm in an alarm-monitor object."""

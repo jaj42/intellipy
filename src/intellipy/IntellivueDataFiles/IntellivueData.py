@@ -357,6 +357,13 @@ class IntellivueData(object):
         self.DataTypes["MeasurementState"] = [16]
         self.DataTypes["UNITType"] = [16]
         self.DataTypes["NuObsValCmp"] = ["count", "length_NuObsValCmp", "NuObsValue"]
+        # Enumeration objects (NOM_MOC_VMO_METRIC_ENUM). Their observed value is
+        # a status code rather than a number: "Sinus Rhythm", "pair PVC's". The
+        # value itself is a tagged union, so EnumVal needs its own reader.
+        self.DataTypes["EnumObsVal"] = ["physio_id", "MeasurementState", "EnumVal"]
+        self.DataTypes["physio_id"] = [16]
+        self.DataTypes["EnumObjIdVal"] = ["enum_obj_id", "FLOATType", "UNITType"]
+        self.DataTypes["enum_obj_id"] = [16]
         self.DataTypes["PollMdibDataReqExt"] = [
             "poll_number",
             "Type",
@@ -786,6 +793,9 @@ class IntellivueData(object):
         self.DataKeys["PollProfileExtOptions"] = {
             "POLL1SECANDWAVEANDLISTANDDYN": b"\x8b\x00\x00\x00",
             # 'POLL1SECANDWAVEANDLISTANDDYN': b'\x1B\x00\x00\x00',
+            # Same, plus POLL_EXT_ENUM: without that bit the monitor refuses
+            # polls against NOM_MOC_VMO_METRIC_ENUM.
+            "POLL1SECANDWAVEANDENUMANDLISTANDDYN": b"\x8f\x00\x00\x00",
             "POLL_EXT_PERIOD_NU_1SEC": b"\x80\x00\x00\x00",
             "POLL_EXT_PERIOD_NU_AVG_12SEC": b"\x40\x00\x00\x00",
             "POLL_EXT_PERIOD_NU_AVG_60SEC": b"\x20\x00\x00\x00",
@@ -803,6 +813,7 @@ class IntellivueData(object):
             b"\x02\x00\x00\x00": "POLL_EXT_NU_PRIO_LIST",
             b"\x01\x00\x00\x00": "POLL_EXT_DYN_MODALITIES",
             b"\x8b\x00\x00\x00": "POLL1SECANDWAVEANDLISTANDDYN",
+            b"\x8f\x00\x00\x00": "POLL1SECANDWAVEANDENUMANDLISTANDDYN",
             # b'\x1B\x00\x00\x00': 'POLL1SECANDWAVEANDLISTANDDYN'
         }
 
@@ -916,6 +927,7 @@ class IntellivueData(object):
             "NOM_ATTR_NU_VAL_OBS": "NuObsValue",
             "NOM_ATTR_TIME_STAMP_ABS": "AbsoluteTime",
             "NOM_ATTR_NU_CMPD_VAL_OBS": "NuObsValCmp",
+            "NOM_ATTR_VAL_ENUM_OBS": "EnumObsVal",
             "NOM_ATTR_TIME_PD_POLL": "PollDataReqPeriod",
             "NOM_ATTR_POLL_NU_PRIO_LIST": "TextIdLabel",
             "NOM_ATTR_POLL_RTSA_PRIO_LIST": "TextIdLabel",
@@ -1014,6 +1026,18 @@ class IntellivueData(object):
         self.DataKeys["OIDType"] = self.loadOIDTypes()
 
         self.DataKeys["SCADAType"] = self.loadSCADATypes()
+
+        # Which branch of the EnumVal union carries the value.
+        self.DataKeys["EnumValChoice"] = {
+            1: "ENUM_OBJ_ID_CHOSEN",
+            4: "ENUM_OBJ_ID_VAL_CHOSEN",
+        }
+
+        # Both fields of an EnumObsVal name codes from the SCADA partition: the
+        # enumeration being reported (NOM_ECG_STAT_RHY) and, when the value is
+        # an object id, the state it is in (NOM_ECG_SINUS_RHY).
+        self.DataKeys["physio_id"] = self.DataKeys["SCADAType"]
+        self.DataKeys["enum_obj_id"] = self.DataKeys["SCADAType"]
 
         self.DataKeys["UNITType"] = self.loadUNITTypes()
 
@@ -1297,6 +1321,14 @@ class IntellivueData(object):
             "PollMdibDataReqExt",
         ]
 
+        self.MessageLists["MDSExtendedPollActionENUM"] = [
+            "SPpdu",
+            "ROapdus",
+            "ROIVapdu",
+            "ActionArgument",
+            "PollMdibDataReqExt",
+        ]
+
         self.MessageParameters["MDSExtendedPollActionNUMERIC"] = {
             "session_id": "DataExportProtocol",
             "p_context_id": "DataExportProtocol",
@@ -1339,6 +1371,25 @@ class IntellivueData(object):
             "CMDType": "CMD_CONFIRMED_ACTION",
             # OIDType: ManagedObjectID, Polled_Obj_Type, Polled_Attr_Group
             "OIDType": ["NOM_MOC_VMS_MDS", "NOM_MOC_VMO_AL_MON", "ALL"],
+            "MdsContext": 0,
+            "Handle": 0,
+            "action_type": "NOM_ACT_POLL_MDIB_DATA_EXT",
+            "poll_number": 1,
+            "NomPartition": "NOM_PART_OBJ",
+            "scope": 0,
+            "RelativeTime": 800000,
+        }
+
+        # Only answered when POLL_EXT_ENUM was negotiated at association time;
+        # otherwise the monitor replies with a Remote Operation Error.
+        self.MessageParameters["MDSExtendedPollActionENUM"] = {
+            "session_id": "DataExportProtocol",
+            "p_context_id": "DataExportProtocol",
+            "ro_type": "ROIV_APDU",
+            "invoke_id": 1,
+            "CMDType": "CMD_CONFIRMED_ACTION",
+            # OIDType: ManagedObjectID, Polled_Obj_Type, Polled_Attr_Group
+            "OIDType": ["NOM_MOC_VMS_MDS", "NOM_MOC_VMO_METRIC_ENUM", "ALL"],
             "MdsContext": 0,
             "Handle": 0,
             "action_type": "NOM_ACT_POLL_MDIB_DATA_EXT",
@@ -2190,6 +2241,64 @@ class IntellivueData(object):
 
         return index
 
+    # Read in data type of EnumVal, returns index
+    def readEnumVal(self, index, current_message_dict, data):
+        """Reads in the EnumVal union of an enumeration observed value
+
+        EnumVal is a tagged union: a "choice" selector, the length of the
+        selected branch, and then the branch itself. Only two branches are
+        defined -- a bare object id naming the state (ENUM_OBJ_ID_CHOSEN), or
+        that id together with a number and its unit (ENUM_OBJ_ID_VAL_CHOSEN).
+        Any other choice is kept as raw bytes and skipped by its length, so an
+        unmodelled branch cannot derail the rest of the message.
+
+        Parameters
+        ----------
+        index:int
+            current index of message being read
+
+        current_message_dict: dict
+            dictionary of parsed message
+
+        data: bytearray
+            actual message to be parsed
+
+        Returns
+        -------
+        index:int
+            revised index of message being read
+
+        """
+        enum_value = {}
+        current_message_dict["EnumVal"] = enum_value
+
+        choice = self.get16(data[index : index + 2])
+        length = self.get16(data[index + 2 : index + 4])
+        enum_value["choice"] = self.DataKeys["EnumValChoice"].get(choice, choice)
+        enum_value["length"] = length
+        index += 4
+
+        end = index + length
+
+        # ENUM_OBJ_ID_CHOSEN: the value is just the state's nomenclature code
+        if choice == 1:
+            index = self.recurseRead(["enum_obj_id"], index, enum_value, data)
+
+        # ENUM_OBJ_ID_VAL_CHOSEN: state code plus a measured value and its unit
+        elif choice == 4:
+            enum_value["EnumObjIdVal"] = {}
+            index = self.recurseRead(
+                self.DataTypes["EnumObjIdVal"], index, enum_value["EnumObjIdVal"], data
+            )
+
+        else:
+            enum_value["raw"] = bytes(data[index:end])
+            index = end
+
+        # Trust the encoded length over the branch we just read, so a longer
+        # (newer) encoding of a known branch still leaves the index correct.
+        return end if length else index
+
     # Read in data type of al_source_code, returns index
     def readAlSourceCode(self, index, current_message_dict, data):
         """Reads in DevAlarmEntry
@@ -2300,6 +2409,10 @@ class IntellivueData(object):
                 # FLOATType needs separate parser
                 elif data_type == "FLOATType":
                     index = self.readFLOAT(index, current_message_dict, data)
+
+                # EnumVal is a union, so its branch needs a separate parser
+                elif data_type == "EnumVal":
+                    index = self.readEnumVal(index, current_message_dict, data)
 
                 # al_source_code needs separate parser
                 elif data_type == "al_source_code":
