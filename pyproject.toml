@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "intellipy"
+version = "0.1.0"
+description = "Python client for the Philips IntelliVue Data Export protocol (numerics, waveforms, alarms over UDP/RS232)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Jona Joachim", email = "jaj@joachim.cc" },
+    { name = "Uday Agrawal" },
+    { name = "Adewole Oyalowo" },
+    { name = "Asaad Lab" },
+]
+keywords = ["intellivue", "philips", "patient-monitor", "iso11073", "medical", "waveform"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Healthcare Industry",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+dependencies = [
+    "numpy",
+    "pyserial",
+]
+
+[project.optional-dependencies]
+docs = ["sphinx", "furo", "myst-parser"]
+dev = ["pytest", "ruff"]
+
+[project.urls]
+"Original project (pyMIND)" = "https://bitbucket.org/asaadneurolab/pymind/"
+
+[project.scripts]
+intellipy-enumerate = "intellipy.enumerate:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/intellipy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

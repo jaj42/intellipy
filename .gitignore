@@ -1,0 +1,27 @@
+# Scrap / working notes (never commit)
+plan.md
+chandra/
+
+# Local-only inspiration for the example scripts — not part of this repo
+plethomap/
+
+# Copyrighted vendor spec PDFs — kept locally as reference, never redistributed
+*.pdf
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Docs build output
+docs/_build/
+
+# Virtual environments
+.venv/
+
+# Editor swap files
+*.swp
