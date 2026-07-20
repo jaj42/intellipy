@@ -15,7 +15,7 @@ with IntellivueClient("udp", timeout=5.0) as client:
     signals = client.enumerate()
 
     waves = [s for s in signals if s.kind == "wave"]
-    client.set_wave_priority([str(s.label) for s in waves[:2]])
+    client.set_wave_priority(waves[:2])
 
     for sample in client.stream(duration=600):
         record(sample)

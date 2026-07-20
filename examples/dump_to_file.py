@@ -92,11 +92,15 @@ def parse_args(argv=None):
 
 
 def choose_waves(signals, requested, limit):
-    """Decide which waveform labels to subscribe to.
+    """Decide which waveforms to subscribe to.
 
-    Explicitly requested labels win as given -- they are passed to the monitor
-    untouched, since a label it does not recognise is simply ignored. Otherwise
-    the first `limit` waveforms of the inventory are used.
+    Returns the enumerated `Signal` objects rather than their names, so the
+    subscription travels as the label code the monitor itself sent. Names are
+    a poor identifier here: the monitor's display strings are localised, and
+    the nomenclature descriptions are not unique.
+
+    A name given on the command line is passed through as typed -- the user
+    asked for it by name, and the codec will resolve it or raise.
 
     Parameters
     ----------
@@ -104,27 +108,34 @@ def choose_waves(signals, requested, limit):
         The enumerated inventory.
 
     requested: list of str or None
-        Labels from the command line.
+        Labels from the command line, matched case-insensitively against each
+        waveform's display string and its nomenclature name.
 
     limit: int
         How many to pick when nothing was requested.
 
     Returns
     -------
-    list of str
+    list of Signal or str
 
     """
-    if requested:
-        return requested
+    waves = [signal for signal in signals if signal.kind == "wave"]
 
-    labels = []
-    for signal in signals:
-        if signal.kind != "wave":
-            continue
-        label = signal.label_string or signal.label
-        if label is not None and str(label) not in labels:
-            labels.append(str(label))
-    return labels[:limit]
+    if requested:
+        chosen = []
+        for name in requested:
+            matches = [
+                signal
+                for signal in waves
+                if name.lower() in (str(signal.label_string).lower(),
+                                    str(signal.label).lower())
+            ]
+            # Fall back to the name as typed, so a label the inventory does not
+            # list can still be attempted rather than silently dropped.
+            chosen.append(matches[0] if matches else name)
+        return chosen
+
+    return waves[:limit]
 
 
 class Recorder:
@@ -224,10 +235,10 @@ def main(argv=None):
         for signal in signals:
             print(f"  {signal.kind:8s} {signal}")
 
-        labels = choose_waves(signals, args.waves, args.max_waves)
-        if labels:
-            print(f"\nsubscribing to waveforms: {', '.join(labels)}")
-            client.set_wave_priority(labels)
+        waves = choose_waves(signals, args.waves, args.max_waves)
+        if waves:
+            print(f"\nsubscribing to waveforms: {', '.join(str(w) for w in waves)}")
+            client.set_wave_priority(waves)
         else:
             print("\nno waveforms selected; recording numerics and alarms only")
 

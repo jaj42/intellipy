@@ -2470,6 +2470,15 @@ class IntellivueData(object):
                     # If there is a key associated with the int
                     # store the value in the created dictionary
                     if self.DataKeys.get(data_type, "Not Defined") != "Not Defined":
+                        # A TextId is the one decoded value that gets sent back
+                        # to the monitor (in a priority list), and resolving it
+                        # to its description loses information: 34 of the 757
+                        # codes share a description with another code, so the
+                        # description does not identify the code again. Keep the
+                        # raw code alongside the readable form.
+                        if data_type == "TextId" and isinstance(bit_range, bytes):
+                            current_message_dict["TextId_code"] = bit_range
+
                         current_message_dict[data_type] = self.DataKeys[data_type].get(
                             bit_range, bit_range
                         )
@@ -3054,13 +3063,23 @@ class IntellivueData(object):
             index of message
 
         parameters: dict
-            parameters for message creation
+            parameters for message creation. ``parameters["TextIdLabel"]`` is a
+            list of labels, each either a 32-bit label code (the ``TextId_code``
+            a poll reply carried, as bytes or int) or a name from
+            ``PhysioLabels.txt``.
 
         Returns
         -------
 
         index: int
             revised index of message
+
+        Raises
+        ------
+
+        KeyError
+            If a name is not in ``PhysioLabels.txt``. Monitor-supplied display
+            strings are not names -- see the note below.
 
         """
         # count
@@ -3073,7 +3092,18 @@ class IntellivueData(object):
         index += 2
 
         for ids in parameters["TextIdLabel"]:
-            output_message += self.DataKeys["TextId"][ids]
+            # Prefer a raw code. Names have to be looked up, and the lookup is
+            # doubly unsafe for anything but a name that came out of this table:
+            # a monitor's own display string ("PA" on a French unit) is usually
+            # absent, and where a description is shared by several codes the
+            # table resolves it to only one of them. A code needs no lookup and
+            # cannot be misresolved.
+            if isinstance(ids, (bytes, bytearray)):
+                output_message += bytes(ids)
+            elif isinstance(ids, int):
+                output_message += bytes(self.set32(ids))
+            else:
+                output_message += self.DataKeys["TextId"][ids]
             index += 4
 
         return index

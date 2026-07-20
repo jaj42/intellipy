@@ -36,7 +36,7 @@ with IntellivueClient("udp", timeout=5.0) as client:
         print(signal)
 
     waves = [s for s in signals if s.kind == "wave"]
-    client.set_wave_priority([str(waves[0].label)])   # 3. subscribe
+    client.set_wave_priority(waves[:1])               # 3. subscribe
 
     for sample in client.stream(duration=60):         # 4. consume
         print(sample["kind"], sample["label"], sample.get("value"))
@@ -55,11 +55,12 @@ than hard-coding what you saw yesterday. See {doc}`enumeration`.
 priority list starts empty. Numerics and alarms flow regardless.
 
 :::{warning}
-Subscribe using `signal.label`, not `signal.label_string`. The label is a nomenclature
-name (`"PLETH wave label"`, and its short form `"Pleth"`); the label *string* is
-whatever the monitor displays, which on a localised unit is not a name the protocol
-tables know — a French monitor calls the arterial line `PA`, and subscribing to that
-silently yields nothing.
+**Pass the `Signal` objects, not their names.** A label is a 32-bit code on the wire;
+`set_wave_priority` sends the code the monitor itself reported
+(`signal.label_code`). Naming a waveform instead means a table lookup that can fail
+(`signal.label_string` is localised — `"PA"` on a French monitor raises `KeyError`)
+or, worse, succeed as the wrong signal (that monitor's `"PB"` resolves to Barometric
+Pressure). Names are for humans; codes are for the monitor.
 :::
 
 **4. Stream.** {meth}`~intellipy.client.IntellivueClient.stream` is a generator. It

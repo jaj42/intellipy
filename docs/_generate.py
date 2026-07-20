@@ -157,9 +157,10 @@ def _generate_physio_labels(target_dir):
         "physio_labels.md",
         "Physiological labels (`PhysioLabels.txt`)",
         "Values of `NOM_ATTR_ID_LABEL`, the 32-bit identifier naming what an "
-        "object measures. The short label is what appears on the monitor screen "
-        f"and what {{meth}}`~intellipy.client.IntellivueClient.set_wave_priority` "
-        f"expects. {len(rows)} entries.",
+        "object measures. The short label is what appears on the monitor screen. "
+        "Note that descriptions are not unique -- 34 codes share one with another "
+        "code -- which is why a subscription travels as the code, not the name. "
+        f"{len(rows)} entries.",
         _table(["Code", "Short label", "Description"], rows),
     )
 

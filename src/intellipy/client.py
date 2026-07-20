@@ -44,6 +44,7 @@ import time
 from intellipy.IntellivueDataFiles.IntellivueData import IntellivueData
 from intellipy.enumerate import (
     CLASS_POLLS,
+    Signal,
     _attribute_value,
     _find,
     _iter_observations,
@@ -166,6 +167,24 @@ def _granted_poll_options(poll_profile_support):
         return set()
 
     return {name for name, bit in POLL_PROFILE_EXT_BITS.items() if options & bit}
+
+
+def _wave_label(label):
+    """Normalise one entry of a priority list to what the codec should send.
+
+    A :class:`~intellipy.enumerate.Signal` is reduced to its raw label code;
+    codes and names are passed through for the codec to handle.
+    """
+    code = getattr(label, "label_code", None)
+    if code is not None:
+        return code
+
+    if isinstance(label, Signal):
+        raise ValueError(
+            f"{label!r} has no label code -- the monitor did not name this "
+            "object, so it cannot be put on the priority list"
+        )
+    return label
 
 
 def _demog_string(attributes, name):
@@ -534,7 +553,7 @@ class IntellivueClient:
         )
 
     def set_wave_priority(self, labels):
-        """Subscribe to a set of waveforms by label.
+        """Subscribe to a set of waveforms.
 
         The monitor streams only the waveforms on its real-time priority list,
         which starts out empty -- so without this call :meth:`stream` yields
@@ -542,9 +561,22 @@ class IntellivueClient:
 
         Parameters
         ----------
-        labels: sequence of str
-            Waveform labels, e.g. ``["Pleth", "ECG MCL"]``, as reported by
-            :meth:`enumerate`.
+        labels: sequence
+            The waveforms to subscribe to, each given as a
+            :class:`~intellipy.enumerate.Signal` from :meth:`enumerate`, a raw
+            32-bit label code, or a name from ``PhysioLabels.txt``.
+
+            Passing the ``Signal`` (or its ``label_code``) is the reliable form,
+            since it needs no name lookup::
+
+                waves = [s for s in client.enumerate() if s.kind == "wave"]
+                client.set_wave_priority(waves)
+
+            Passing a name works for names that came out of the nomenclature
+            table (``"Pleth"``, ``"ECG Lead MCL"``) but **not** for a monitor's
+            own display string: those are localised, and are either missing from
+            the table (raising ``KeyError``) or, worse, present as some unrelated
+            signal's name.
 
         Returns
         -------
@@ -552,10 +584,17 @@ class IntellivueClient:
             The decoded ``MDSSetPriorityListResult``, or None if the monitor
             did not confirm within the timeout.
 
+        Raises
+        ------
+        ValueError
+            If a :class:`~intellipy.enumerate.Signal` carries no label code,
+            which means the monitor never named that object.
+
         """
         self.socket.send(
             self.codec.writeData(
-                "MDSSetPriorityListWAVE", {"TextIdLabel": list(labels)}
+                "MDSSetPriorityListWAVE",
+                {"TextIdLabel": [_wave_label(label) for label in labels]},
             )
         )
 

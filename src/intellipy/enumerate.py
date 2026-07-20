@@ -100,9 +100,19 @@ class Signal:
     handle : int
         Object handle -- the identifier used to subscribe to this signal.
     label : str or int or None
-        Physiological label (``NOM_ATTR_ID_LABEL``), e.g. ``NOM_PULS_OXIM_SAT_O2``.
+        Physiological label (``NOM_ATTR_ID_LABEL``) resolved through
+        ``PhysioLabels.txt``, e.g. ``"PLETH wave label"``. Human-readable, and
+        always English regardless of the monitor's own language.
+    label_code : bytes or None
+        The same label as the monitor sent it: a raw 32-bit nomenclature code.
+        **This is what to subscribe with** -- see
+        :meth:`~intellipy.client.IntellivueClient.set_wave_priority`. `label` is
+        a lookup of this and cannot always be turned back into it, since 34 of
+        the 757 known codes share a description with another code.
     label_string : str or None
-        Short display string (``NOM_ATTR_ID_LABEL_STRING``), e.g. ``"SpO2"``.
+        Display string the *monitor* sent (``NOM_ATTR_ID_LABEL_STRING``), e.g.
+        ``"Pleth"`` -- or ``"PA"``, ``"FC"`` on a French-localised monitor.
+        Localised, and not a name the protocol tables know: for display only.
     unit : str or None
         Unit of measure (``NOM_ATTR_UNIT_CODE``), e.g. ``NOM_DIM_PERCENT``.
     raw_attrs : set of str
@@ -114,6 +124,7 @@ class Signal:
     mds_context: int
     handle: int
     label: object = None
+    label_code: bytes = None
     label_string: str = None
     unit: str = None
     raw_attrs: set = field(default_factory=set)
@@ -205,9 +216,14 @@ def _merge_observations(inventory, msg):
             )
             inventory[key] = signal
 
-        label = _attribute_value(attribute_list, "NOM_ATTR_ID_LABEL").get("TextId")
+        label_attribute = _attribute_value(attribute_list, "NOM_ATTR_ID_LABEL")
+        label = label_attribute.get("TextId")
         if label:
             signal.label = label
+        # The raw code, kept because it is what goes back on the wire.
+        label_code = label_attribute.get("TextId_code")
+        if label_code:
+            signal.label_code = label_code
 
         label_string = _attribute_value(
             attribute_list, "NOM_ATTR_ID_LABEL_STRING"

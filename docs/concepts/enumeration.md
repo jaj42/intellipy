@@ -106,19 +106,33 @@ Three things in that table are worth pausing on:
   monitor fronts a docked module rack as well as itself. Keying an inventory on the
   handle alone would have collided.
 - **The `disp` column is localised, the label column is not.** This monitor is set to
-  French: heart rate displays as `FC`, the arterial line as `PA`. The `label` column
-  comes from the nomenclature table shipped with `intellipy` and is always English.
-  This distinction has teeth — see below.
+  French: heart rate displays as `FC`, the arterial line as `PA`, the cuff as `PB`.
+  The `label` column comes from the nomenclature table shipped with `intellipy` and is
+  always English. Neither column is on the wire — both are renderings of a 32-bit
+  code, and that distinction has teeth. See below.
 
-:::{admonition} Subscribe by `label`, not by `label_string`
+:::{admonition} Subscribe with the `Signal`, not with a name
 :class: warning
 
-{meth}`~intellipy.client.IntellivueClient.set_wave_priority` resolves the names you
-give it through the shipped `PhysioLabels.txt` table. `signal.label` (`"PLETH wave
-label"`, `"ECG Lead MCL"`) and its short form (`"Pleth"`, `"MCL"`) are keys in that
-table. `signal.label_string` is whatever the *monitor* chose to display, which on a
-localised unit may not be — `"PA"` is not in the table, so subscribing to the arterial
-waveform by its displayed name silently gets you nothing.
+On the wire a label is a **32-bit code**, both when the monitor sends it and when you
+send it back in a priority list. Names are a detour, and a lossy one:
+
+- `label_string` is the monitor's display text. `"PA"` is not in the nomenclature
+  table at all, so feeding it back raises `KeyError`. Worse, the NIBP's `"PB"` *is*
+  in the table — as **Barometric Pressure**. That subscription succeeds, silently,
+  to the wrong signal.
+- `label` is the table's description, which is not unique: 34 of the 757 codes share
+  a description with another code, so the description cannot always be turned back
+  into the code it came from.
+
+{class}`~intellipy.enumerate.Signal` therefore keeps the raw code as `label_code`, and
+{meth}`~intellipy.client.IntellivueClient.set_wave_priority` accepts the `Signal`
+itself. No lookup, nothing to misresolve:
+
+```python
+waves = [s for s in client.enumerate() if s.kind == "wave"]
+client.set_wave_priority(waves)
+```
 :::
 
 ## Transport-agnostic by construction

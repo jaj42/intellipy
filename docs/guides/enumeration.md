@@ -54,16 +54,17 @@ for signal in signals:
 
 ```python
 Signal(kind="wave", oid_class="NOM_MOC_VMO_METRIC_SA_RT", mds_context=1,
-       handle=986, label="PLETH wave label", label_string="Pleth",
-       unit="- ( no dimension )", raw_attrs={...})
+       handle=986, label="PLETH wave label", label_code=b"\x00\x02\x4b\xb4",
+       label_string="Pleth", unit="- ( no dimension )", raw_attrs={...})
 ```
 
 | Field | Use it for |
 |---|---|
 | `kind` | `"numeric"`, `"wave"`, `"alarm"`, `"enumeration"` |
 | `handle` | Matching samples from {meth}`~intellipy.client.IntellivueClient.stream` |
-| `label` | **Subscribing** — a nomenclature name the protocol tables know |
-| `label_string` | Displaying to a human — may be localised |
+| `label_code` | **Subscribing** — the raw 32-bit code, exactly as received |
+| `label` | Displaying, logging, reading — the table's English description |
+| `label_string` | Displaying — the monitor's own text, may be localised |
 | `mds_context` | Telling apart objects from a host monitor and a docked rack |
 | `unit` | Interpreting values |
 | `raw_attrs` | Debugging: every attribute name seen for this object |
@@ -72,15 +73,26 @@ Signal(kind="wave", oid_class="NOM_MOC_VMO_METRIC_SA_RT", mds_context=1,
 
 ```python
 waves = [s for s in signals if s.kind == "wave"]
-client.set_wave_priority([str(s.label) for s in waves[:2]])
+client.set_wave_priority(waves[:2])
 ```
 
+Pass the `Signal` objects themselves. `set_wave_priority` takes `label_code` from each
+— the 32-bit code the monitor sent — and puts it straight back on the wire, which is
+what the priority list carries anyway.
+
 :::{warning}
-Use `label`, not `label_string`. `set_wave_priority` resolves names through the
-shipped `PhysioLabels.txt` table, where `"PLETH wave label"` and `"Pleth"` are both
-keys. `label_string` is the monitor's display text: on the French-localised monitor in
-the reference capture the arterial waveform displays as `PA`, which is not in the
-table, and subscribing to it fails silently — no error, no samples.
+**Do not subscribe by name.** Both readable forms are lossy renderings of that code,
+and both fail on the reference capture's (French) monitor:
+
+| passed to `set_wave_priority` | result |
+|---|---|
+| `signal` or `signal.label_code` | the right waveform |
+| `"Pleth"` / `"PLETH wave label"` | the right waveform — the name happens to be a table key |
+| `"PA"` (the ABP wave's `label_string`) | `KeyError` — not in the table |
+| `"PB"` (the NIBP's `label_string`) | **subscribes to Barometric Pressure** |
+
+The last row is why this matters: the wrong signal, no error. And `label` is not a
+safe key either, since 34 of the 757 codes share a description with another code.
 :::
 
 Read the list back to confirm what took effect:

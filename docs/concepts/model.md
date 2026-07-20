@@ -143,8 +143,9 @@ Two different naming systems appear on every object, and confusing them is easy:
 
 **Physiological label** (`NOM_ATTR_ID_LABEL`, from `PhysioLabels.txt`)
 : A 32-bit code for what the object *is*, with a short screen label attached —
-  `0x00024182` = `HR` = "Heart Rate". This is what the monitor displays, and what
-  {meth}`~intellipy.client.IntellivueClient.set_wave_priority` expects you to name.
+  `0x00024182` = `HR` = "Heart Rate". The **code** is what identifies the object and
+  what a priority list carries; the readable forms are renderings of it, and neither
+  is a reliable key back — see {doc}`../guides/enumeration`.
 
 **SCADA type** (from `SCADATypes.txt`)
 : A 16-bit code for what a *particular value* represents —
