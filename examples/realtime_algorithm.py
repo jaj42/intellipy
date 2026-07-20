@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Derive a metric from a live waveform, beat by beat.
 
-Where ``dump_to_file.py`` stores everything and analyses nothing, this example
+Where ``intellipy-dump`` stores everything and analyses nothing, this example
 does the opposite: it consumes :meth:`~intellipy.client.IntellivueClient.stream`
 as a generator, keeps a single waveform, and runs a small streaming algorithm
 over it -- detecting the foot of each pulse and printing the instantaneous

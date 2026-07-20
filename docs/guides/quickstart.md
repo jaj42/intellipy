@@ -1,15 +1,15 @@
 # Quickstart: record a minute of data
 
 The shortest path from a monitor on the network to files on disk. Everything here
-runs `examples/dump_to_file.py`, which is the reference for how the pieces fit
-together — read it alongside this page.
+runs the `intellipy-dump` command (`intellipy.dump`), which is the reference for how
+the pieces fit together — read it alongside this page.
 
 ```console
-$ uv run python examples/dump_to_file.py --duration 60 --outdir recording
+$ uv run intellipy-dump --duration 60 --all-waves --outdir recording
 ```
 
 With a monitor broadcasting on the network, that associates, prints the signal
-inventory, subscribes to the first two waveforms, records for sixty seconds and
+inventory, subscribes to every waveform it reports, records for sixty seconds and
 writes:
 
 ```
@@ -23,7 +23,7 @@ recording/
 
 ## The same thing, written out
 
-Nothing in the example is hidden behind helpers; the whole flow is five calls.
+Nothing in the tool is hidden behind helpers; the whole flow is five calls.
 
 ```python
 from intellipy.client import IntellivueClient
@@ -104,14 +104,14 @@ are already scaled to physical units.
 ## Useful options
 
 ```console
-$ uv run python examples/dump_to_file.py --help
+$ uv run intellipy-dump --help
 ```
 
 | Option | Effect |
 |---|---|
-| `--duration N` | Seconds to record (default 60) |
+| `--duration N` | Seconds to record (default: until Ctrl-C) |
 | `--wave LABEL` | Subscribe to this waveform; repeatable |
-| `--max-waves N` | How many to take when none are named (default 2) |
+| `--all-waves` | Subscribe to every waveform the monitor reports |
 | `--transport rs232 --host /dev/ttyUSB0` | Use the serial link |
 | `--host 192.168.1.50` | Bind one interface instead of `0.0.0.0` |
 | `--timeout N` | Seconds any single read may block (default 5) |

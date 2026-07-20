@@ -3,7 +3,7 @@
 {doc}`quickstart` runs the recorder; this page covers what it writes, how to change
 that, and the things that bite on long recordings.
 
-The full script is `examples/dump_to_file.py`.
+The full script is `intellipy/dump.py`, installed as the `intellipy-dump` command.
 
 ## The flow
 

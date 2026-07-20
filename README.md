@@ -36,9 +36,10 @@ src/intellipy/                     the package (import name: intellipy)
   SaveProto.py                     queue-based save protocol example
   client.py                        the supported high-level client
   enumerate.py                     signal enumeration + `intellipy-enumerate` CLI
+  dump.py                          record-to-file tool (`intellipy-dump` CLI)
   _docs.py                         `intellipy-docs` documentation build entry point
 docs/                              Sphinx sources (Furo + MyST)
-examples/                          record-to-file and real-time processing scripts
+examples/                          real-time processing script
 tests/                             pytest suite; fixtures decode without hardware
 reference/                         a sample packet capture (offline decode fixture)
 ```

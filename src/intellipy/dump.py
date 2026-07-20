@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Record a monitor's live data to files.
 
-The quickstart example: associate with an IntelliVue monitor, print the
-signals it exposes, subscribe to some waveforms and write everything that
-arrives to disk until the run is over.
+The quickstart tool: associate with an IntelliVue monitor, print the signals
+it exposes, subscribe to some waveforms and write everything that arrives to
+disk until the run is stopped.
 
-    uv run python examples/dump_to_file.py --duration 60 --wave Pleth --wave ECG
+    uv run intellipy-dump --wave Pleth --wave ECG
+
+Recording runs until interrupted with Ctrl-C unless ``--duration`` bounds it.
+Waveforms are only recorded when asked for, by name (``--wave``) or wholesale
+(``--all-waves``); numerics, alarms and enumeration states always are.
 
 Five files are produced in ``--outdir``:
 
@@ -67,8 +71,8 @@ def parse_args(argv=None):
         help="seconds any single read may block (default: 5)",
     )
     parser.add_argument(
-        "--duration", type=float, default=60.0,
-        help="seconds to record for (default: 60)",
+        "--duration", type=float, default=None,
+        help="seconds to record for (default: until interrupted with Ctrl-C)",
     )
     parser.add_argument(
         "--outdir", default="recording",
@@ -76,13 +80,12 @@ def parse_args(argv=None):
     )
     parser.add_argument(
         "--wave", action="append", dest="waves", metavar="LABEL",
-        help="waveform to subscribe to, repeatable; defaults to the first "
-             "--max-waves the monitor reports",
+        help="waveform to subscribe to, repeatable; without this or "
+             "--all-waves no waveform is recorded",
     )
     parser.add_argument(
-        "--max-waves", type=int, default=2,
-        help="how many waveforms to subscribe to when none are named "
-             "(default: 2)",
+        "--all-waves", action="store_true",
+        help="subscribe to every waveform the monitor reports",
     )
     parser.add_argument(
         "--no-demographics", action="store_true",
@@ -91,7 +94,7 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
-def choose_waves(signals, requested, limit):
+def choose_waves(signals, requested, all_waves=False):
     """Decide which waveforms to subscribe to.
 
     Returns the enumerated `Signal` objects rather than their names, so the
@@ -111,12 +114,15 @@ def choose_waves(signals, requested, limit):
         Labels from the command line, matched case-insensitively against each
         waveform's display string and its nomenclature name.
 
-    limit: int
-        How many to pick when nothing was requested.
+    all_waves: bool
+        Take every waveform in the inventory. Named waveforms win over this,
+        so an explicit `--wave` still narrows the selection.
 
     Returns
     -------
     list of Signal or str
+        Empty when nothing was asked for: waveforms are the bulk of the
+        traffic, so they are opt-in.
 
     """
     waves = [signal for signal in signals if signal.kind == "wave"]
@@ -135,7 +141,7 @@ def choose_waves(signals, requested, limit):
             chosen.append(matches[0] if matches else name)
         return chosen
 
-    return waves[:limit]
+    return waves if all_waves else []
 
 
 class Recorder:
@@ -235,12 +241,15 @@ def main(argv=None):
         for signal in signals:
             print(f"  {signal.kind:8s} {signal}")
 
-        waves = choose_waves(signals, args.waves, args.max_waves)
+        waves = choose_waves(signals, args.waves, args.all_waves)
         if waves:
             print(f"\nsubscribing to waveforms: {', '.join(str(w) for w in waves)}")
             client.set_wave_priority(waves)
         else:
-            print("\nno waveforms selected; recording numerics and alarms only")
+            print(
+                "\nno waveforms selected (--wave/--all-waves); "
+                "recording numerics and alarms only"
+            )
 
         with Recorder(args.outdir) as recorder:
             if not args.no_demographics:
@@ -251,7 +260,10 @@ def main(argv=None):
                     path = recorder.write_demographics(demographics)
                     print(f"wrote patient record to {path}")
 
-            print(f"\nrecording for {args.duration:g} s (Ctrl-C to stop early)...")
+            if args.duration is None:
+                print("\nrecording until interrupted (Ctrl-C to stop)...")
+            else:
+                print(f"\nrecording for {args.duration:g} s (Ctrl-C to stop early)...")
             try:
                 for sample in client.stream(duration=args.duration):
                     recorder.write(sample)

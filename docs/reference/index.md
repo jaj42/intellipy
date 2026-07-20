@@ -13,6 +13,10 @@ The supported surface is small:
   behind {meth}`~intellipy.client.IntellivueClient.enumerate`, plus the
   `intellipy-enumerate` command line entry point.
 
+{mod}`intellipy.dump`
+: The `intellipy-dump` recorder — wave selection and the per-kind file writers. The
+  worked example of the client, and importable if you want to build on it.
+
 {mod}`intellipy.IntellivueDataFiles.IntellivueData`
 : The codec. `writeData` builds a message from a template, `readData` parses one,
   `getMessageType` classifies bytes. Only needed if you are going below the client.
@@ -29,6 +33,7 @@ The supported surface is small:
 
 client
 enumerate
+dump
 codec
 sockets
 legacy

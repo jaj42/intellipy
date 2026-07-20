@@ -10,7 +10,7 @@ to whatever governs patient data where you work — GDPR, HIPAA, your institutio
 research approvals. `intellipy` imposes no policy and applies no de-identification;
 handling is yours.
 
-`examples/dump_to_file.py` writes demographics to their own `demographics.json`,
+`intellipy-dump` writes demographics to their own `demographics.json`,
 deliberately separate from the signal streams, so the identifying file can be
 withheld, encrypted or deleted independently of the physiological recording. Pass
 `--no-demographics` to skip it entirely.
