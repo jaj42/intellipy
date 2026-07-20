@@ -221,11 +221,22 @@ def heart_rate(feet, beats=5, low=25.0, high=250.0):
 # -- plumbing ---------------------------------------------------------------
 
 
-def wave_points(samples, label):
-    """Flatten matching wave samples into a stream of ``(time, value)`` pairs.
+def _matches(sample, wanted):
+    return sample["kind"] == "wave" and wanted in (
+        sample["label"], sample.get("object_label")
+    )
 
-    A wave sample carries a block of points, so the block structure is undone
-    here and the per-point times the client already computed are used as-is.
+
+def track_waveform(samples, label):
+    """Split a sample stream into one waveform's rate and its points.
+
+    `detect_feet` needs `sampling_rate` up front to size its windows, but the
+    client only knows the real rate once the monitor has named it -- in the
+    metadata carried by the *first* reply cycle (see
+    :meth:`~intellipy.client.IntellivueClient.stream`). So the first matching
+    sample is peeked here to read it, rather than taking it as a flag: a
+    `--rate` argument could silently disagree with what the monitor is
+    actually sending.
 
     Parameters
     ----------
@@ -235,40 +246,75 @@ def wave_points(samples, label):
     label: str or None
         Waveform to keep; None keeps the first waveform seen and sticks to it.
 
-    Yields
-    ------
-    (float, float)
+    Returns
+    -------
+    (float, iterator of (float, float))
+        The waveform's sampling rate in Hz, and its flattened
+        ``(time, value)`` points -- a wave sample carries a block of points,
+        so the block structure is undone here.
 
     """
     wanted = label
-    for sample in samples:
+    stream = iter(samples)
+    for sample in stream:
         if sample["kind"] != "wave":
             continue
         if wanted is None:
             wanted = sample["label"]
             print(f"tracking waveform {wanted!r}", file=sys.stderr)
-        if sample["label"] != wanted and sample.get("object_label") != wanted:
+        if not _matches(sample, wanted):
             continue
-        yield from zip(sample["time"], sample["wave"])
+        sampling_rate = sample["sampling_rate"]
+        if not sampling_rate:
+            raise RuntimeError(
+                f"{wanted!r}: monitor has not reported a sampling rate yet"
+            )
+        first_points = list(zip(sample["time"], sample["wave"]))
+        break
+    else:
+        raise RuntimeError(f"stream ended before any {wanted!r} sample arrived")
+
+    def points():
+        yield from first_points
+        for sample in stream:
+            if _matches(sample, wanted):
+                yield from zip(sample["time"], sample["wave"])
+
+    return sampling_rate, points()
 
 
 def simulated_samples(duration, rate=125.0, bpm=72.0, block=64):
     """Fake a plethysmogram, so the pipeline can be run without a monitor.
 
-    Produces the same sample dicts the client yields. The pulse shape is a
-    skewed sine -- a fast upstroke and a slow decay -- which is crude, but
-    carries the one feature the detector looks for.
+    Produces the same sample dicts the client yields, `sampling_rate`
+    included, so `track_waveform` needs no simulate-specific handling. The
+    pulse shape is a skewed sine -- a fast upstroke and a slow decay -- which
+    is crude, but carries the one feature the detector looks for.
+
+    Parameters
+    ----------
+    duration: float or None
+        Seconds to simulate; None runs forever, matching a live
+        ``stream(duration=None)``.
+
     """
     period = 60.0 / bpm
-    points = int(duration * rate)
-    values = []
-    for index in range(points):
-        time = index / rate
-        phase = (time % period) / period
-        values.append(math.sin(math.pi * phase**0.6) ** 3)
+    limit = None if duration is None else int(duration * rate)
 
-    for start in range(0, points, block):
-        chunk = values[start:start + block]
+    def values():
+        index = 0
+        while limit is None or index < limit:
+            time = index / rate
+            phase = (time % period) / period
+            yield math.sin(math.pi * phase**0.6) ** 3
+            index += 1
+
+    stream = values()
+    start = 0
+    while True:
+        chunk = list(islice(stream, block))
+        if not chunk:
+            return
         yield {
             "kind": "wave",
             "label": "Pleth",
@@ -277,7 +323,9 @@ def simulated_samples(duration, rate=125.0, bpm=72.0, block=64):
             "time": [(start + offset) / rate for offset in range(len(chunk))],
             "wave": chunk,
             "unit": None,
+            "sampling_rate": rate,
         }
+        start += len(chunk)
 
 
 def queue_pipeline(client, duration=None):
@@ -328,13 +376,8 @@ def parse_args(argv=None):
         help="seconds any single read may block (default: 5)",
     )
     parser.add_argument(
-        "--duration", type=float, default=60.0,
-        help="seconds to run for (default: 60)",
-    )
-    parser.add_argument(
-        "--rate", type=float, default=125.0,
-        help="waveform sampling rate in Hz, used to size the moving windows "
-             "(default: 125, the IntelliVue rate for Pleth and ABP)",
+        "--duration", type=float, default=None,
+        help="seconds to run for (default: until interrupted with Ctrl-C)",
     )
     parser.add_argument(
         "--simulate", action="store_true",
@@ -353,8 +396,12 @@ def main(argv=None):
     args = parse_args(argv)
 
     if args.simulate:
-        samples = simulated_samples(args.duration, rate=args.rate)
-        run(wave_points(samples, "Pleth"), args.rate)
+        samples = simulated_samples(args.duration)
+        try:
+            sampling_rate, points = track_waveform(samples, "Pleth")
+            run(points, sampling_rate)
+        except KeyboardInterrupt:
+            print("interrupted", file=sys.stderr)
         return 0
 
     from intellipy.client import IntellivueClient
@@ -369,9 +416,11 @@ def main(argv=None):
         client.enumerate()
         client.set_wave_priority([args.wave])
 
-        points = wave_points(client.stream(duration=args.duration), args.wave)
         try:
-            run(points, args.rate)
+            sampling_rate, points = track_waveform(
+                client.stream(duration=args.duration), args.wave
+            )
+            run(points, sampling_rate)
         except KeyboardInterrupt:
             print("interrupted", file=sys.stderr)
 

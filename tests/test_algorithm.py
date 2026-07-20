@@ -250,27 +250,60 @@ def test_heart_rate_of_no_feet_is_empty(algo):
 # -- the sample-stream adapter ---------------------------------------------
 
 
-def test_wave_points_flattens_blocks_to_pairs(algo):
+def test_track_waveform_flattens_blocks_to_pairs(algo):
     """Wave samples arrive as blocks; the detector wants a flat point stream."""
     samples = [
-        {"kind": "wave", "label": "Pleth", "time": [0.0, 0.1], "wave": [1.0, 2.0]},
-        {"kind": "wave", "label": "Pleth", "time": [0.2], "wave": [3.0]},
+        {"kind": "wave", "label": "Pleth", "time": [0.0, 0.1], "wave": [1.0, 2.0],
+         "sampling_rate": 10.0},
+        {"kind": "wave", "label": "Pleth", "time": [0.2], "wave": [3.0],
+         "sampling_rate": 10.0},
     ]
-    assert list(algo.wave_points(samples, "Pleth")) == [
+    rate, points = algo.track_waveform(samples, "Pleth")
+    assert rate == 10.0
+    assert list(points) == [
         (0.0, 1.0),
         (0.1, 2.0),
         (0.2, 3.0),
     ]
 
 
-def test_wave_points_ignores_other_signals(algo):
+def test_track_waveform_ignores_other_signals(algo):
     """A stream carries every subscribed signal, so filtering is the caller's job."""
     samples = [
-        {"kind": "wave", "label": "ABP", "time": [0.0], "wave": [9.0]},
-        {"kind": "wave", "label": "Pleth", "time": [0.1], "wave": [1.0]},
+        {"kind": "wave", "label": "ABP", "time": [0.0], "wave": [9.0],
+         "sampling_rate": 50.0},
+        {"kind": "wave", "label": "Pleth", "time": [0.1], "wave": [1.0],
+         "sampling_rate": 125.0},
         {"kind": "numeric", "label": "Pleth", "time": 0.2, "value": 5.0},
     ]
-    assert list(algo.wave_points(samples, "Pleth")) == [(0.1, 1.0)]
+    rate, points = algo.track_waveform(samples, "Pleth")
+    assert rate == 125.0
+    assert list(points) == [(0.1, 1.0)]
+
+
+def test_track_waveform_picks_the_first_waveform_when_label_is_none(algo):
+    samples = [
+        {"kind": "wave", "label": "ABP", "object_label": "ABP", "time": [0.0],
+         "wave": [9.0], "sampling_rate": 50.0},
+    ]
+    rate, points = algo.track_waveform(samples, None)
+    assert rate == 50.0
+    assert list(points) == [(0.0, 9.0)]
+
+
+def test_track_waveform_raises_without_a_sampling_rate(algo):
+    """The first cycle carries the rate; a stream that skips it can't be sized."""
+    samples = [
+        {"kind": "wave", "label": "Pleth", "time": [0.0], "wave": [1.0],
+         "sampling_rate": None},
+    ]
+    with pytest.raises(RuntimeError):
+        algo.track_waveform(samples, "Pleth")
+
+
+def test_track_waveform_raises_if_the_stream_ends_first(algo):
+    with pytest.raises(RuntimeError):
+        algo.track_waveform([], "Pleth")
 
 
 def test_simulated_samples_match_the_client_schema(algo):
@@ -284,7 +317,17 @@ def test_simulated_samples_match_the_client_schema(algo):
     assert samples
     for sample in samples:
         assert sample["kind"] == "wave"
-        assert set(sample) >= {"kind", "label", "handle", "time", "wave", "unit"}
+        assert set(sample) >= {
+            "kind", "label", "handle", "time", "wave", "unit", "sampling_rate"
+        }
+        assert sample["sampling_rate"] == 125.0
         assert len(sample["time"]) == len(sample["wave"])
 
     assert sum(len(s["wave"]) for s in samples) == 125
+
+
+def test_simulated_samples_run_forever_when_duration_is_none(algo):
+    """``--duration`` defaults to None, so the simulator must not precompute a length."""
+    stream = algo.simulated_samples(duration=None, rate=125.0)
+    first_hundred = [next(stream) for _ in range(100)]
+    assert len(first_hundred) == 100

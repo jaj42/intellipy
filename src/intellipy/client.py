@@ -24,8 +24,8 @@ original project already expect:
 kind            keys
 =============== =============================================================
 ``numeric``     ``kind``, ``label``, ``handle``, ``time``, ``value``, ``unit``
-``wave``        ``kind``, ``label``, ``handle``, ``time`` (list), ``wave``
-                (list)
+``wave``        ``kind``, ``label``, ``object_label``, ``handle``, ``time``
+                (list), ``wave`` (list), ``unit``, ``sampling_rate``
 ``alarm``       ``kind``, ``label``, ``handle``, ``time``, ``code``,
                 ``source``, ``alarm_type``, ``state``, ``text``
 ``enumeration`` ``kind``, ``label``, ``handle``, ``time``, ``state``,
@@ -902,6 +902,7 @@ class IntellivueClient:
             "time": times,
             "wave": [a * value + b for value in values],
             "unit": info.get("unit"),
+            "sampling_rate": sampling_rate,
         }
 
     def _parse_waves(self, observation, timestamp):

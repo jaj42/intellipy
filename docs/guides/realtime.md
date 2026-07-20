@@ -19,8 +19,12 @@ the identical pipeline, so the detector can be exercised — and tested — with
 hardware. Against a real monitor:
 
 ```console
-$ uv run python examples/realtime_algorithm.py --wave Pleth --duration 60
+$ uv run python examples/realtime_algorithm.py --wave Pleth
 ```
+
+`--duration` defaults to `None` — both `--simulate` and the live path then run until
+interrupted with Ctrl-C, the same as `intellipy-dump`. Pass `--duration 60` to stop
+after a fixed time instead.
 
 ## The pipeline
 
@@ -29,18 +33,22 @@ seconds each moving window needs, and it runs in constant memory for an arbitrar
 long recording:
 
 ```python
-samples = client.stream(duration=args.duration)   # dicts, all kinds
-points  = wave_points(samples, "Pleth")           # → (time, value) pairs
-feet    = detect_feet(points, sampling_rate)      # → times of pulse onsets
-rates   = heart_rate(feet)                        # → (time, bpm)
+samples             = client.stream(duration=args.duration)      # dicts, all kinds
+sampling_rate, points = track_waveform(samples, "Pleth")          # → Hz, (time, value) pairs
+feet                = detect_feet(points, sampling_rate)          # → times of pulse onsets
+rates               = heart_rate(feet)                            # → (time, bpm)
 
 for time, rate in rates:
     print(f"t={time:8.2f}s  HR={rate:6.1f} bpm")
 ```
 
-`wave_points` does the flattening the schema invites: `stream()` yields waveform
+`track_waveform` does the flattening the schema invites — `stream()` yields waveform
 *blocks* with parallel `time` and `wave` lists, and everything downstream wants a flat
-sequence of points.
+sequence of points — and it is also where the sampling rate comes from: it peeks the
+first matching block for its `sampling_rate`, the value the client cached from the
+monitor's own `NOM_ATTR_TIME_PD_SAMP` attribute. There is no `--rate` flag; a value
+the caller supplies could silently disagree with what the monitor is actually sending
+for the selected waveform.
 
 ## Filtering to one waveform
 
@@ -48,13 +56,10 @@ A block's `label` is the SCADA type for a compound wave and the object label
 otherwise; `object_label` always carries the object's own name. Match on both:
 
 ```python
-def wave_points(samples, label):
-    for sample in samples:
-        if sample["kind"] != "wave":
-            continue
-        if label not in (sample["label"], sample.get("object_label")):
-            continue
-        yield from zip(sample["time"], sample["wave"])
+def _matches(sample, wanted):
+    return sample["kind"] == "wave" and wanted in (
+        sample["label"], sample.get("object_label")
+    )
 ```
 
 ## The algorithm
@@ -71,9 +76,10 @@ Two details that matter more than the detector itself:
 
 **Windows are sized in seconds, not samples.** `detect_feet` takes `sampling_rate` and
 converts (0.24 s integration, 3 s adaptive threshold). `plethomap` hard-coded 125 Hz
-sample counts, which silently misbehaves on ECG at 500 Hz or Resp at 62.5 Hz. Pass
-`--rate`, or read the real rate off the client — it caches the sampling period per
-handle as it decodes.
+sample counts, which silently misbehaves on ECG at 500 Hz or Resp at 62.5 Hz. The rate
+comes from the stream itself — the client caches the sampling period per handle as it
+decodes and reports it on every wave sample as `sampling_rate` — so the example works
+unmodified on any waveform.
 
 **Implausible intervals are dropped, not smoothed.** `heart_rate` discards anything
 outside 25–250 bpm. A missed foot doubles an interval; that is a detection failure, and
