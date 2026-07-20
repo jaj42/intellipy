@@ -12,14 +12,8 @@ import pytest
 
 from intellipy.client import _parse_demographics
 from intellipy.enumerate import _iter_observations
-from intellipy.IntellivueDataFiles.IntellivueData import IntellivueData
 
 DATA = Path(__file__).parent / "data"
-
-
-@pytest.fixture(scope="module")
-def codec():
-    return IntellivueData()
 
 
 @pytest.fixture(scope="module")

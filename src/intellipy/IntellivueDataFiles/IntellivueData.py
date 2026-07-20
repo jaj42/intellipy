@@ -2116,10 +2116,12 @@ class IntellivueData(object):
         current_message_dict["VariableLabel"]["value"] = []
         index += 2
 
-        # Read through the values "length" times
-        for i in range(current_message_dict["VariableLabel"]["length"]):
+        # Read through the values "length" times, from the current position --
+        # not from the start of the message, which read the session header back
+        # as every VariableLabel's value.
+        for _ in range(current_message_dict["VariableLabel"]["length"]):
             current_message_dict["VariableLabel"]["value"].append(
-                self.get8(data[i : i + 1])
+                self.get8(data[index : index + 1])
             )
             index += 1
 
@@ -2153,6 +2155,10 @@ class IntellivueData(object):
         """Reads in Strings
         formatting: utf-16, and each of the two bytes in order has to be swapped
 
+        The wire format is NUL-terminated and padded out to a fixed width with
+        spaces, so the value is cut at the terminator and right-trimmed. Text
+        before the terminator is returned intact, spaces included.
+
         Parameters
         ----------
         index:int
@@ -2183,9 +2189,14 @@ class IntellivueData(object):
 
             current_message_dict["String"]["value"] += temp.decode("utf-16")
 
-        current_message_dict["String"]["value"] = current_message_dict["String"][
-            "value"
-        ].split(" ")[0]
+        # The field is NUL-terminated and padded out to a fixed width with
+        # spaces (the nomenclature calls this STRFMT_UNICODE_NT). Drop the
+        # terminator and the padding, but nothing else -- this used to be
+        # ``.split(" ")[0]``, which stripped the padding by truncating at the
+        # first space and so lost the tail of every multi-word value.
+        current_message_dict["String"]["value"] = (
+            current_message_dict["String"]["value"].split("\x00")[0].rstrip()
+        )
 
         index += current_message_dict["String"]["length"]
 

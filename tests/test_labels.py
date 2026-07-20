@@ -15,15 +15,10 @@ the raw code in ``label_code`` for that purpose. These tests pin down the two
 ways the readable forms go wrong, and that the code path avoids both.
 """
 
-from pathlib import Path
-
 import pytest
 
 from intellipy.client import _wave_label
-from intellipy.enumerate import Signal, harvest_inventory, read_pcap_payloads
-from intellipy.IntellivueDataFiles.IntellivueData import IntellivueData
-
-CAPTURE = Path(__file__).parents[1] / "reference" / "intellivue_enumeration.pcapng"
+from intellipy.enumerate import Signal, harvest_inventory
 
 #: The four waveforms in the reference capture: handle -> (code, description,
 #: the string the French-localised monitor displays).
@@ -36,20 +31,9 @@ CAPTURED_WAVES = {
 
 
 @pytest.fixture(scope="module")
-def codec():
-    return IntellivueData()
-
-
-@pytest.fixture(scope="module")
-def inventory(codec):
-    """The reference capture's inventory, or a skip if it cannot be read."""
-    if not CAPTURE.exists():
-        pytest.skip("reference capture not present")
-    try:
-        payloads = read_pcap_payloads(str(CAPTURE))
-    except RuntimeError:
-        pytest.skip("tshark not installed")
-    return harvest_inventory(codec, payloads)
+def inventory(codec, enumeration_payloads):
+    """The reference capture's inventory, harvested from the committed fixture."""
+    return harvest_inventory(codec, enumeration_payloads)
 
 
 @pytest.fixture(scope="module")

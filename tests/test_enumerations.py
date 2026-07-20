@@ -19,12 +19,7 @@ the object class -- see :func:`test_capture_mds_advertises_enumeration_class`.
 """
 
 import struct
-from pathlib import Path
 
-import pytest
-
-from intellipy.IntellivueDataFiles.IntellivueData import IntellivueData
-from intellipy.enumerate import read_pcap_payloads
 
 # Nomenclature codes, from the Data Export guide's "Enumerations" section.
 NOM_ATTR_ID_HANDLE = 0x0921
@@ -102,11 +97,6 @@ def enumeration_reply(observations):
         struct.pack_into(">H", packet, offset, current + grew)
 
     return bytes(packet)
-
-
-@pytest.fixture(scope="module")
-def codec():
-    return IntellivueData()
 
 
 # -- nomenclature ---------------------------------------------------------
@@ -302,22 +292,14 @@ def test_client_caches_labels_across_poll_cycles(codec):
 # -- what the reference capture does say -----------------------------------
 
 
-def test_capture_mds_advertises_enumeration_class(codec):
+def test_capture_mds_advertises_enumeration_class(codec, enumeration_payloads):
     """The captured monitor lists the enumeration class in its MDS object support.
 
     This is real data: the M8000 in the capture reports it supports up to 60
     ``NOM_MOC_VMO_METRIC_ENUM`` instances, even though that association never
     asked for them.
     """
-    capture = Path(__file__).parents[1] / "reference" / "intellivue_enumeration.pcapng"
-    if not capture.exists():
-        pytest.skip("reference capture not present")
-
-    try:
-        payloads = read_pcap_payloads(str(capture))
-    except RuntimeError:
-        pytest.skip("tshark not installed")
-
+    payloads = enumeration_payloads
     supported = None
     for payload in payloads:
         if codec.getMessageType(payload) != "MDSCreateEvent":
