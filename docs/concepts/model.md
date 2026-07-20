@@ -2,8 +2,7 @@
 
 ## MDS, MDIB, objects
 
-A monitor speaking Data Export presents itself as a **Medical Device System (MDS)** —
-one object representing the whole device. In the nomenclature it is
+The monitors comply to the CEN ISO/IEEE 11073 Health informatics - Medical / health device communication standards family. It presents itself as a **Medical Device System (MDS)**: one object representing the whole device. In the nomenclature it is
 `NOM_MOC_VMS_MDS`, and it is the object every request in this protocol is *addressed
 to*, even when the data you want lives elsewhere.
 
