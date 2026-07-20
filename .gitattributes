@@ -1,0 +1,7 @@
+# Store every text file with LF in the repository and check it out with LF,
+# regardless of the contributor's platform. The tree was mixed CRLF/LF before
+# this was pinned.
+* text=auto eol=lf
+
+# Packet captures are binary; never apply text or line-ending conversion.
+*.pcapng binary
