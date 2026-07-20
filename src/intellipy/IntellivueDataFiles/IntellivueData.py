@@ -109,6 +109,11 @@ class IntellivueData(object):
         self.MessageLists = {}
         self.MessageParameters = {}
 
+        #: Object class of the poll reply being parsed, set per message by
+        #: readData. Disambiguates attribute OIDs that are reused across
+        #: classes.
+        self.polled_object_class = None
+
         self.DataTypes["Nomenclature"] = [32]
         self.DataTypes["ROapdus"] = ["ro_type", "length_final"]
         self.DataTypes["ro_type"] = [16]
@@ -412,6 +417,13 @@ class IntellivueData(object):
         self.DataTypes["significant_bits"] = [8, 1]
         self.DataTypes["SaFlags"] = [16]
         self.DataTypes["MetricState"] = [16]
+        self.DataTypes["PatDemoState"] = [16]
+        self.DataTypes["AdmitState"] = [16]
+        self.DataTypes["PatientType"] = [16]
+        self.DataTypes["PatientSex"] = [16]
+        self.DataTypes["PatPacedMode"] = [16]
+        self.DataTypes["PatBsaFormula"] = [16]
+        self.DataTypes["PatMeasure"] = ["FLOATType", "UNITType"]
         self.DataTypes["ScaleRangeSpec16"] = [
             "lower_absolute_value",
             "upper_absolute_value",
@@ -923,6 +935,76 @@ class IntellivueData(object):
             "NOM_ATTR_AL_MON_P_AL_LIST": "DevAlarmList",
             "NOM_ATTR_AL_MON_T_AL_LIST": "DevAlarmList",
             "NOM_ATTR_TIME_STAMP_REL": "RelativeTime",
+            # Patient Demographics Attribute Group (NOM_ATTR_GRP_PT_DEMOG)
+            "NOM_ATTR_PT_DEMOG_ST": "PatDemoState",
+            "NOM_ATTR_SYS_ADT_ST": "AdmitState",
+            "NOM_ATTR_PT_TYPE": "PatientType",
+            "NOM_ATTR_PT_SEX": "PatientSex",
+            "NOM_ATTR_PT_PACED_MODE": "PatPacedMode",
+            "NOM_ATTR_PT_BSA_FORMULA": "PatBsaFormula",
+            "NOM_ATTR_PT_ID": "String",
+            "NOM_ATTR_PT_NAME_GIVEN": "String",
+            "NOM_ATTR_PT_NAME_FAMILY": "String",
+            "NOM_ATTR_PT_NOTES1": "String",
+            "NOM_ATTR_PT_NOTES2": "String",
+            "NOM_ATTR_PT_DOB": "AbsoluteTime",
+            "NOM_ATTR_PT_AGE": "PatMeasure",
+            "NOM_ATTR_PT_HEIGHT": "PatMeasure",
+            "NOM_ATTR_PT_WEIGHT": "PatMeasure",
+            "NOM_ATTR_PT_BSA": "PatMeasure",
+        }
+
+        # Patient demographics enumerations, per the Data Export spec's
+        # Patient Demographics attribute definitions.
+        self.DataKeys["PatDemoState"] = {
+            b"\x00\x00": "EMPTY",
+            b"\x00\x01": "PRE_ADMITTED",
+            b"\x00\x02": "ADMITTED",
+            b"\x00\x08": "DISCHARGED",
+            "EMPTY": b"\x00\x00",
+            "PRE_ADMITTED": b"\x00\x01",
+            "ADMITTED": b"\x00\x02",
+            "DISCHARGED": b"\x00\x08",
+        }
+
+        self.DataKeys["PatientType"] = {
+            b"\x00\x00": "PAT_TYPE_UNSPECIFIED",
+            b"\x00\x01": "ADULT",
+            b"\x00\x02": "PEDIATRIC",
+            b"\x00\x03": "NEONATAL",
+            "PAT_TYPE_UNSPECIFIED": b"\x00\x00",
+            "ADULT": b"\x00\x01",
+            "PEDIATRIC": b"\x00\x02",
+            "NEONATAL": b"\x00\x03",
+        }
+
+        self.DataKeys["PatientSex"] = {
+            b"\x00\x00": "SEX_UNKNOWN",
+            b"\x00\x01": "MALE",
+            b"\x00\x02": "FEMALE",
+            b"\x00\x09": "SEX_UNSPECIFIED",
+            "SEX_UNKNOWN": b"\x00\x00",
+            "MALE": b"\x00\x01",
+            "FEMALE": b"\x00\x02",
+            "SEX_UNSPECIFIED": b"\x00\x09",
+        }
+
+        # Values above PAT_PACED_GEN are reserved for special paced modes; the
+        # spec tells clients to test only for "paced / not paced".
+        self.DataKeys["PatPacedMode"] = {
+            b"\x00\x00": "PAT_NOT_PACED",
+            b"\x00\x01": "PAT_PACED_GEN",
+            "PAT_NOT_PACED": b"\x00\x00",
+            "PAT_PACED_GEN": b"\x00\x01",
+        }
+
+        self.DataKeys["PatBsaFormula"] = {
+            b"\x00\x00": "BSA_FORMULA_UNSPEC",
+            b"\x00\x01": "BSA_FORMULA_BOYD",
+            b"\x00\x02": "BSA_FORMULA_DUBOIS",
+            "BSA_FORMULA_UNSPEC": b"\x00\x00",
+            "BSA_FORMULA_BOYD": b"\x00\x01",
+            "BSA_FORMULA_DUBOIS": b"\x00\x02",
         }
 
         self.DataKeys["OIDType"] = self.loadOIDTypes()
@@ -1136,6 +1218,32 @@ class IntellivueData(object):
                 "NOM_MOC_VMS_MDS",
                 "NOM_MOC_VMO_AL_MON",
                 "NOM_ATTR_GRP_VMO_STATIC",
+            ],
+            "MdsContext": 0,
+            "Handle": 0,
+            "action_type": "NOM_ACT_POLL_MDIB_DATA",
+            "poll_number": 1,
+            "NomPartition": "NOM_PART_OBJ",
+            "scope": 0,
+        }
+
+        # Same single poll, aimed at the Patient Demographics object rather
+        # than at a metric class. The reply classifies as a plain
+        # MDSSinglePollActionResult, so no extra parse plumbing is needed.
+        self.MessageLists["MDSPatientDemographicsPoll"] = self.MessageLists[
+            "MDSSinglePollAction"
+        ]
+
+        self.MessageParameters["MDSPatientDemographicsPoll"] = {
+            "session_id": "DataExportProtocol",
+            "p_context_id": "DataExportProtocol",
+            "ro_type": "ROIV_APDU",
+            "invoke_id": 1,
+            "CMDType": "CMD_CONFIRMED_ACTION",
+            "OIDType": [
+                "NOM_MOC_VMS_MDS",
+                "NOM_MOC_PT_DEMOG",
+                "NOM_ATTR_GRP_PT_DEMOG",
             ],
             "MdsContext": 0,
             "Handle": 0,
@@ -1809,7 +1917,14 @@ class IntellivueData(object):
                 elif OIDIndex == b"\x01\x02":
                     OIDType = "NOM_MDIB_OBJ_SUPPORT"
                 elif OIDIndex == b"\xf0\x01":
-                    OIDType = "NOM_ATTR_POLL_PROFILE_EXT"
+                    # 61441 is overloaded. It is NOM_ATTR_POLL_PROFILE_EXT in
+                    # association and MDS replies, but NOM_ATTR_PT_ID_INT in
+                    # the patient demographics group; only the object class the
+                    # reply answers for tells them apart.
+                    if self.polled_object_class == "NOM_MOC_PT_DEMOG":
+                        OIDType = "NOM_ATTR_PT_ID_INT"
+                    else:
+                        OIDType = "NOM_ATTR_POLL_PROFILE_EXT"
                 elif OIDIndex == b"\x00\x00":
                     OIDType = 0
                 else:
@@ -1837,9 +1952,26 @@ class IntellivueData(object):
                         "AVAType"
                     ][OIDType]["AttributeValue"]
 
-                    index = self.recurseRead(
-                        [AttributeType], index, current_message_dict_OID, data
-                    )
+                    # A named attribute whose value type we don't model yet (eg
+                    # the private NOM_ATTR_PT_ID_INT). Keep the bytes and skip
+                    # over them, rather than derailing the whole message.
+                    if AttributeType not in self.DataTypes and AttributeType not in (
+                        "AttributeList",
+                        "VariableLabel",
+                        "VariableData",
+                        "String",
+                        "FLOATType",
+                        "al_source_code",
+                    ):
+                        current_message_dict_OID["raw"] = bytes(
+                            data[index : index + length]
+                        )
+                        index += length
+
+                    else:
+                        index = self.recurseRead(
+                            [AttributeType], index, current_message_dict_OID, data
+                        )
 
                 # Otherwise, just keep the number as a placeholder and add to the index appropriately
                 else:
@@ -2257,6 +2389,14 @@ class IntellivueData(object):
                         data,
                     )
 
+                    # A poll reply names the object class it answers for in its
+                    # header, before any AttributeList. Remember it: some
+                    # attribute OIDs mean different things per class.
+                    if data_type == "Type" and "PollInfoList" in message_list:
+                        self.polled_object_class = current_message_dict[data_type].get(
+                            "OIDType"
+                        )
+
         return index
 
     # Main function to read in messages, returns dictionary
@@ -2286,6 +2426,9 @@ class IntellivueData(object):
 
         # Initialize dictionary based on message
         current_message_dict = {}
+
+        # Per-message parse context (see recurseRead / readAttributeList)
+        self.polled_object_class = None
 
         # Initialize index
         if message_type == "AssociationResponse":

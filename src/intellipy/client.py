@@ -55,6 +55,12 @@ TICKS_PER_SECOND = 8000
 #: Poll replies carrying streamed observations.
 POLL_REPLY_TYPES = ("MDSExtendedPollActionResult", "LinkedMDSExtendedPollActionResult")
 
+#: Replies to a single (non-extended) poll, as used for patient demographics.
+SINGLE_POLL_REPLY_TYPES = (
+    "MDSSinglePollActionResult",
+    "LinkedMDSSinglePollActionResult",
+)
+
 #: Extended-poll template per object class, in the order `stream` sends them.
 STREAM_POLLS = (
     ("NOM_MOC_VMO_METRIC_NU", "MDSExtendedPollActionNUMERIC"),
@@ -105,6 +111,87 @@ def _scale_factors(scale_range_spec):
     a = (upper - lower) / x_range
     b = lower - a * scale_range_spec["lower_scaled_value"]
     return a, b
+
+
+def _demog_string(attributes, name):
+    """A demographics String attribute, or None when blank.
+
+    The monitor pads unset text fields to a lone NUL terminator rather than
+    omitting them.
+    """
+    value = _attribute_value(attributes, name).get("String", {})
+    if not isinstance(value, dict):
+        return None
+    text = str(value.get("value", "")).rstrip("\x00").strip()
+    return text or None
+
+
+def _demog_measure(attributes, name):
+    """A ``PatMeasure`` as ``(value, unit)``; value is None when unset.
+
+    Unset measurements carry the IEEE-1073 NaN code, which the codec surfaces
+    as the string ``"Not a number"``, but still name their unit.
+    """
+    value = _attribute_value(attributes, name).get("PatMeasure", {})
+    if not isinstance(value, dict):
+        return None, None
+
+    number = value.get("FLOATType")
+    unit = value.get("UNITType")
+    if isinstance(number, str):
+        number = None
+    return number, unit
+
+
+def _demog_date(attributes, name):
+    """A date of birth as ``YYYY-MM-DD``, or None when unset.
+
+    ``AbsoluteTime`` is BCD; an all-zero record means "no date".
+    """
+    value = _attribute_value(attributes, name).get("AbsoluteTime", {})
+    if not isinstance(value, dict):
+        return None
+
+    century = value.get("century", 0)
+    year = value.get("year", 0)
+    month = value.get("month", 0)
+    day = value.get("day", 0)
+    if not (century or year or month or day):
+        return None
+    return f"{century:02d}{year:02d}-{month:02d}-{day:02d}"
+
+
+def _parse_demographics(observation):
+    """Flatten a ``NOM_MOC_PT_DEMOG`` ``ObservationPoll`` into a plain dict."""
+    attributes = observation.get("AttributeList", {})
+
+    return {
+        "handle": observation.get("Handle"),
+        "state": _attribute_value(attributes, "NOM_ATTR_PT_DEMOG_ST").get(
+            "PatDemoState"
+        ),
+        "patient_id": _demog_string(attributes, "NOM_ATTR_PT_ID"),
+        "name_given": _demog_string(attributes, "NOM_ATTR_PT_NAME_GIVEN"),
+        "name_family": _demog_string(attributes, "NOM_ATTR_PT_NAME_FAMILY"),
+        "notes1": _demog_string(attributes, "NOM_ATTR_PT_NOTES1"),
+        "notes2": _demog_string(attributes, "NOM_ATTR_PT_NOTES2"),
+        "dob": _demog_date(attributes, "NOM_ATTR_PT_DOB"),
+        "sex": _attribute_value(attributes, "NOM_ATTR_PT_SEX").get("PatientSex"),
+        "patient_type": _attribute_value(attributes, "NOM_ATTR_PT_TYPE").get(
+            "PatientType"
+        ),
+        "paced_mode": _attribute_value(attributes, "NOM_ATTR_PT_PACED_MODE").get(
+            "PatPacedMode"
+        ),
+        "age": _demog_measure(attributes, "NOM_ATTR_PT_AGE"),
+        "height": _demog_measure(attributes, "NOM_ATTR_PT_HEIGHT"),
+        "weight": _demog_measure(attributes, "NOM_ATTR_PT_WEIGHT"),
+        "bsa": _demog_measure(attributes, "NOM_ATTR_PT_BSA"),
+        "bsa_formula": _attribute_value(attributes, "NOM_ATTR_PT_BSA_FORMULA").get(
+            "PatBsaFormula"
+        ),
+        "attributes": attributes,
+    }
 
 
 class IntellivueClient:
@@ -413,6 +500,55 @@ class IntellivueClient:
                 continue
             if self.codec.getMessageType(message) == "MDSGetPriorityListResult":
                 return self.codec.readData(message)
+        return None
+
+    # -- patient demographics -------------------------------------------------
+
+    def get_patient_demographics(self):
+        """Ask the monitor who the current patient is.
+
+        Sends a single poll against the ``NOM_MOC_PT_DEMOG`` object and decodes
+        its Patient Demographics attribute group. Unset fields come back as
+        ``None`` rather than as the protocol's blank strings and NaNs, so an
+        unadmitted bed yields a dict of mostly ``None``.
+
+        The returned values are patient identifiers -- name, medical record
+        number, date of birth. Handle and store them accordingly.
+
+        Returns
+        -------
+        dict or None
+            Demographics, or None if the monitor did not answer within the
+            timeout. Keys: ``state``, ``patient_id``, ``name_given``,
+            ``name_family``, ``dob``, ``sex``, ``patient_type``,
+            ``paced_mode``, ``age``, ``height``, ``weight``, ``bsa``,
+            ``bsa_formula``, ``notes1``, ``notes2``, ``handle``. Each of
+            ``age``/``height``/``weight``/``bsa`` is a ``(value, unit)`` pair.
+            ``attributes`` holds the raw decoded attribute list.
+
+        """
+        self.socket.send(self.codec.writeData("MDSPatientDemographicsPoll"))
+
+        deadline = time.monotonic() + self.timeout
+        while time.monotonic() < deadline:
+            try:
+                message = self.socket.receive()
+            except TimeoutError:
+                continue
+            if not message:
+                continue
+            if self.codec.getMessageType(message) not in SINGLE_POLL_REPLY_TYPES:
+                continue
+
+            decoded = self.codec.readData(message)
+            reply = _find(decoded, "PollMdibDataReply")
+            if not isinstance(reply, dict):
+                continue
+            if reply.get("Type", {}).get("OIDType") != "NOM_MOC_PT_DEMOG":
+                continue
+
+            for _, observation in _iter_observations(decoded):
+                return _parse_demographics(observation)
         return None
 
     # -- streaming -----------------------------------------------------------
