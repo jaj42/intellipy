@@ -172,6 +172,7 @@ def _parse_demographics(observation):
         ),
         "patient_id": _demog_string(attributes, "NOM_ATTR_PT_ID"),
         "name_given": _demog_string(attributes, "NOM_ATTR_PT_NAME_GIVEN"),
+        "name_middle": _demog_string(attributes, "NOM_ATTR_PT_NAME_MIDDLE"),
         "name_family": _demog_string(attributes, "NOM_ATTR_PT_NAME_FAMILY"),
         "notes1": _demog_string(attributes, "NOM_ATTR_PT_NOTES1"),
         "notes2": _demog_string(attributes, "NOM_ATTR_PT_NOTES2"),
@@ -520,7 +521,7 @@ class IntellivueClient:
         dict or None
             Demographics, or None if the monitor did not answer within the
             timeout. Keys: ``state``, ``patient_id``, ``name_given``,
-            ``name_family``, ``dob``, ``sex``, ``patient_type``,
+            ``name_middle``, ``name_family``, ``dob``, ``sex``, ``patient_type``,
             ``paced_mode``, ``age``, ``height``, ``weight``, ``bsa``,
             ``bsa_formula``, ``notes1``, ``notes2``, ``handle``. Each of
             ``age``/``height``/``weight``/``bsa`` is a ``(value, unit)`` pair.

@@ -74,6 +74,7 @@ def test_reply_is_a_single_poll_result(codec, reply):
         "NOM_ATTR_PT_ID",
         "NOM_ATTR_PT_NAME_FAMILY",
         "NOM_ATTR_PT_NAME_GIVEN",
+        "NOM_ATTR_PT_NAME_MIDDLE",
         "NOM_ATTR_PT_DOB",
         "NOM_ATTR_PT_SEX",
         "NOM_ATTR_PT_AGE",
@@ -105,11 +106,34 @@ def test_internal_patient_id_wins_the_oid_collision(demographics):
     )
 
 
+def test_middle_name_code_comes_from_iso_11073_10101(codec):
+    """2399 is Middle Name, though the Philips guide never tabulates its code.
+
+    The guide defines the attribute in prose but omits it from its code table.
+    ISO 11073-10101 publishes the OBJ-partition term codes, which are the
+    attribute codes offset by 65536; every code the guide *does* tabulate
+    agrees, so the ones it omits can be read off the same list.
+    """
+    oids = codec.DataKeys["OIDType"]
+
+    for term_code, name in [
+        (67932, "NOM_ATTR_PT_NAME_FAMILY"),  # known anchor
+        (67933, "NOM_ATTR_PT_NAME_GIVEN"),  # known anchor
+        (67934, "NOM_ATTR_PT_NAME_BIRTH"),
+        (67935, "NOM_ATTR_PT_NAME_MIDDLE"),
+        (67936, "NOM_ATTR_PT_NAME_TITLE"),
+    ]:
+        assert oids[name] == (term_code - 65536).to_bytes(2, "big")
+
+    assert oids[b"\x09\x5f"] == "NOM_ATTR_PT_NAME_MIDDLE"
+
+
 def test_discharged_bed_reports_no_identifiers(demographics):
     assert demographics["state"] == "DISCHARGED"
     assert demographics["handle"] == 80
     assert demographics["patient_id"] is None
     assert demographics["name_given"] is None
+    assert demographics["name_middle"] is None
     assert demographics["name_family"] is None
     assert demographics["dob"] is None
 
