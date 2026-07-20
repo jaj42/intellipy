@@ -22,12 +22,12 @@ each object, its identity attributes as well as its value:
 
 Every object in that reply carries at least:
 
-| Attribute | OID | What you learn |
-|---|---|---|
-| `NOM_ATTR_ID_HANDLE` | `0x0921` | The handle to match samples against |
-| `NOM_ATTR_ID_LABEL` | `0x0924` | What it measures, as a 32-bit label code |
-| `NOM_ATTR_ID_LABEL_STRING` | `0x0927` | The display string, e.g. `"SpO2"` |
-| `NOM_ATTR_UNIT_CODE` | `0x0996` | Its unit (numerics and waveforms) |
+| Attribute                  | OID      | What you learn                           |
+| -------------------------- | -------- | ---------------------------------------- |
+| `NOM_ATTR_ID_HANDLE`       | `0x0921` | The handle to match samples against      |
+| `NOM_ATTR_ID_LABEL`        | `0x0924` | What it measures, as a 32-bit label code |
+| `NOM_ATTR_ID_LABEL_STRING` | `0x0927` | The display string, e.g. `"SpO2"`        |
+| `NOM_ATTR_UNIT_CODE`       | `0x0996` | Its unit (numerics and waveforms)        |
 
 Collecting the objects from **the first full poll cycle is the enumeration**. Nothing
 further is needed — and nothing further is possible.

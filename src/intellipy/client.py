@@ -4,9 +4,8 @@
 
     with IntellivueClient("udp") as client:
         client.associate()
-        for signal in client.enumerate():
-            print(signal)
-        client.set_wave_priority(["Pleth"])
+        signals = client.enumerate()
+        client.set_wave_priority([s for s in signals if s.kind == "wave"])
         for sample in client.stream(duration=60):
             print(sample)
 

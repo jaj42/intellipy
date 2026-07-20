@@ -1,20 +1,14 @@
 # intellipy
 
-A Python implementation of the **Philips IntelliVue Data Export protocol** — the
+A Python implementation of the **Philips IntelliVue Data Export protocol**, the
 documented, vendor-supported interface for streaming live physiological data
-(numerics, waveforms, and alarms) off IntelliVue-family patient monitors
+(numerics, waveforms, enumerations and alarms) off IntelliVue-family patient monitors
 (X2, MP-series, MX-series) over UDP or RS232.
 
 `intellipy` associates with a monitor, enumerates the signals it exposes, subscribes
 to waveforms, and decodes the ISO/IEEE 11073-based message stream into plain Python
-values. It is a read-oriented, interoperability/clinical-data-export tool — it does
+values. It is a read-oriented, interoperability/clinical-data-export tool. It does
 not configure or control the monitor's clinical function.
-
-## Status
-
-This project is being restructured into a modern packaged library. The protocol codec,
-the high-level client, live enumeration, the example scripts and the documentation are
-in place; the test suite is being filled out.
 
 ## Documentation
 
@@ -26,7 +20,7 @@ uv run intellipy-docs --serve      # builds, then serves on localhost:8000
 The docs cover both the API and the protocol itself — a glossary and primer for MDS,
 RORS, extended polls and the 11073 nomenclature, guides for recording and real-time
 processing, and lookup tables generated from the package's own nomenclature files.
-They are published to GitHub Pages from `main` by `.github/workflows/docs.yml`.
+They are published to GitHub Pages.
 
 ## Layout
 

@@ -14,10 +14,13 @@ from intellipy.client import IntellivueClient
 with IntellivueClient("udp") as client:
     client.associate()
 
-    for signal in client.enumerate():
-        print(signal)                       # SpO2 (handle 33749) [NOM_DIM_PERCENT]
+    signals = client.enumerate()
+    for signal in signals:
+        print(signal)              # SpO₂ (handle 33749) [% ( percentage )]
 
-    client.set_wave_priority(["Pleth"])
+    waves = [s for s in signals if s.kind == "wave"]
+    client.set_wave_priority(waves[:1])
+
     for sample in client.stream(duration=60):
         print(sample["label"], sample["time"], sample.get("value"))
 ```

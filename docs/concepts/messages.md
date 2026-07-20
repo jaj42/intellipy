@@ -10,7 +10,7 @@ boundaries are makes both the wire format and this library's message names reada
 │ ┌──────────────────────────────────────────────────────┐ │
 │ │ ROapdus       ROSE APDU type + length                │ │
 │ │ ┌──────────────────────────────────────────────────┐ │ │
-│ │ │ ROIVapdu    invoke id + command type              │ │ │
+│ │ │ ROIVapdu    invoke id + command type             │ │ │
 │ │ │ ┌──────────────────────────────────────────────┐ │ │ │
 │ │ │ │ ActionArgument / EventReportArgument …       │ │ │ │
 │ │ │ │   → PollMdibDataReqExt, PollMdibDataReplyExt │ │ │ │
@@ -26,15 +26,15 @@ The first byte identifies the session PDU. Association-phase messages use ISO se
 PDU codes; everything after association uses `0xE1`, the Data Export protocol's own
 data PDU:
 
-| Byte | Session PDU | Meaning |
-|---|---|---|
+| Byte   | Session PDU  | Meaning                           |
+| ------ | ------------ | --------------------------------- |
 | `0x0D` | `CN_SPDU_SI` | Connect — the association request |
 | `0x0E` | `AC_SPDU_SI` | Accept — the association response |
-| `0x0C` | `RF_SPDU_SI` | Refuse |
-| `0x09` | `FN_SPDU_SI` | Finish — the release request |
+| `0x0C` | `RF_SPDU_SI` | Refuse                            |
+| `0x09` | `FN_SPDU_SI` | Finish — the release request      |
 | `0x0A` | `DN_SPDU_SI` | Disconnect — the release response |
-| `0x19` | `AB_SPDU_SI` | Abort |
-| `0xE1` | `SPpdu` | Data — everything else |
+| `0x19` | `AB_SPDU_SI` | Abort                             |
+| `0xE1` | `SPpdu`      | Data — everything else            |
 
 This is exactly how {meth}`~intellipy.IntellivueDataFiles.IntellivueData.IntellivueData.getMessageType`
 classifies an incoming packet: first byte, then a handful of discriminating bytes
@@ -51,12 +51,12 @@ The middle layer is **ROSE** — ISO's Remote Operation Service Element, a
 request/response framework. Four APDU types appear, and the four-letter acronyms are
 worth memorising because the whole protocol is described in them:
 
-| APDU | Code | Meaning |
-|---|---|---|
-| **ROIV** | 1 | *Invoke* — a request. Everything the client sends is a ROIV. |
-| **RORS** | 2 | *Result* — a reply, and the **last** one for this invocation. |
-| **ROER** | 3 | *Error* — the request was refused. |
-| **ROLRS** | 5 | *Linked result* — a reply **with more to come**. |
+| APDU      | Code | Meaning                                                      |
+| --------- | ---- | ------------------------------------------------------------ |
+| **ROIV**  | 1    | *Invoke* — a request. Everything the client sends is a ROIV. |
+| **RORS**  | 2    | *Result* — a reply, and the **last** one for this invocation. |
+| **ROER**  | 3    | *Error* — the request was refused.                           |
+| **ROLRS** | 5    | *Linked result* — a reply **with more to come**.             |
 
 Every invocation carries an **invoke id**; replies echo it, which is how a reply is
 matched to its request when several are outstanding.
@@ -81,19 +81,19 @@ an enumeration poll on an association that never negotiated `POLL_EXT_ENUM`.
 
 Inside the ROIV sits a **command type**, the CMIP-style operation being invoked:
 
-| Command | Used for |
-|---|---|
-| `CMD_CONFIRMED_ACTION` | Polls, priority-list changes — anything with a result |
-| `CMD_CONFIRMED_EVENT_REPORT` | The MDS create event, which must be acknowledged |
-| `CMD_GET` / `CMD_SET` | Reading and writing attributes directly |
-| `CMD_EVENT_REPORT` | Unconfirmed notifications |
+| Command                      | Used for                                              |
+| ---------------------------- | ----------------------------------------------------- |
+| `CMD_CONFIRMED_ACTION`       | Polls, priority-list changes — anything with a result |
+| `CMD_CONFIRMED_EVENT_REPORT` | The MDS create event, which must be acknowledged      |
+| `CMD_GET` / `CMD_SET`        | Reading and writing attributes directly               |
+| `CMD_EVENT_REPORT`           | Unconfirmed notifications                             |
 
 Data export is built almost entirely on **actions**, not on GET/SET. An action names
 an **action type** — another nomenclature code — and carries a typed argument:
 
-| Action | Meaning |
-|---|---|
-| `NOM_ACT_POLL_MDIB_DATA` | Single poll: send the current values once |
+| Action                       | Meaning                                         |
+| ---------------------------- | ----------------------------------------------- |
+| `NOM_ACT_POLL_MDIB_DATA`     | Single poll: send the current values once       |
 | `NOM_ACT_POLL_MDIB_DATA_EXT` | Extended poll: keep sending for a stated period |
 
 (polls)=
@@ -142,11 +142,16 @@ waveforms currently eligible for export, and it starts out **empty**.
 
 So an extended poll of `NOM_MOC_VMO_METRIC_SA_RT` on a fresh association returns the
 waveform objects (that is enumeration working correctly) but no samples. You must set
-the list first, by label:
+the list first, naming each waveform by its 32-bit label code — which is exactly what
+enumeration handed you, so pass the objects straight back:
 
 ```python
-client.set_wave_priority(["Pleth", "ECG MCL"])
+waves = [s for s in client.enumerate() if s.kind == "wave"]
+client.set_wave_priority(waves)
 ```
+
+The list travels as codes, never as text; see {doc}`../guides/enumeration` for why
+subscribing by name is a trap.
 
 There is a numeric priority list too (`MDSSetPriorityListNUMERIC`), but numerics are
 exported without one.

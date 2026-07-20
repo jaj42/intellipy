@@ -18,13 +18,13 @@ codec.DataKeys["UNITType"]["NOM_DIM_PERCENT"]    # → the code
 codec.DataKeys["TextId"]["Pleth"]                # → b'\x00\x02K\xb4'
 ```
 
-| Table | Loaded into | Holds |
-|---|---|---|
-| `OIDTypes.txt` | `DataKeys["OIDType"]` | Object classes, attributes, actions |
-| `EventTypes.txt` | `DataKeys["EventTypes"]` | Alarm and event codes |
-| `SCADATypes.txt` | `DataKeys["SCADAType"]` | What a value measures |
-| `UNITTypes.txt` | `DataKeys["UNITType"]` | Units of measure |
-| `PhysioLabels.txt` | `DataKeys["TextId"]` | Physiological labels and display names |
+| Table              | Loaded into              | Holds                                  |
+| ------------------ | ------------------------ | -------------------------------------- |
+| `OIDTypes.txt`     | `DataKeys["OIDType"]`    | Object classes, attributes, actions    |
+| `EventTypes.txt`   | `DataKeys["EventTypes"]` | Alarm and event codes                  |
+| `SCADATypes.txt`   | `DataKeys["SCADAType"]`  | What a value measures                  |
+| `UNITTypes.txt`    | `DataKeys["UNITType"]`   | Units of measure                       |
+| `PhysioLabels.txt` | `DataKeys["TextId"]`     | Physiological labels and display names |
 
 :::{note}
 These tables are the vendor's, transcribed. Where a code the monitor sends is missing

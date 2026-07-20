@@ -15,12 +15,12 @@ attribute-group.
 Objects belong to **classes** (their `MOC`, Managed Object Class). The four that
 matter for data export:
 
-| Class | OID | Holds |
-|---|---|---|
-| `NOM_MOC_VMO_METRIC_NU` | 6 | Numerics — heart rate, SpO₂, a blood pressure triplet |
-| `NOM_MOC_VMO_METRIC_SA_RT` | 9 | Real-time sampled waveforms — ECG, Pleth, ABP, Resp |
-| `NOM_MOC_VMO_AL_MON` | 54 | The alarm monitor, whose attributes are the active alarm lists |
-| `NOM_MOC_VMO_METRIC_ENUM` | 5 | Enumerations — a *state* rather than a number (ECG rhythm) |
+| Class                      | OID  | Holds                                                        |
+| -------------------------- | ---- | ------------------------------------------------------------ |
+| `NOM_MOC_VMO_METRIC_NU`    | 6    | Numerics — heart rate, SpO₂, a blood pressure triplet        |
+| `NOM_MOC_VMO_METRIC_SA_RT` | 9    | Real-time sampled waveforms — ECG, Pleth, ABP, Resp          |
+| `NOM_MOC_VMO_AL_MON`       | 54   | The alarm monitor, whose attributes are the active alarm lists |
+| `NOM_MOC_VMO_METRIC_ENUM`  | 5    | Enumerations — a *state* rather than a number (ECG rhythm)   |
 
 Plus one non-metric class this library reads: `NOM_MOC_PT_DEMOG`, the patient
 demographics record (see {doc}`../guides/demographics`).
@@ -70,20 +70,20 @@ what you actually get back is a dict of names and Python values, not raw integer
 
 The attributes worth knowing by name:
 
-| Attribute | Meaning |
-|---|---|
-| `NOM_ATTR_ID_HANDLE` | The object's handle |
-| `NOM_ATTR_ID_LABEL` | *What* it measures, as a 32-bit physiological label |
-| `NOM_ATTR_ID_LABEL_STRING` | The short display string, e.g. `"SpO2"` |
-| `NOM_ATTR_UNIT_CODE` | Unit of measure |
-| `NOM_ATTR_NU_VAL_OBS` | A numeric's observed value |
-| `NOM_ATTR_NU_CMPD_VAL_OBS` | A *compound* numeric's values (see below) |
-| `NOM_ATTR_SA_VAL_OBS` | A waveform's block of samples |
-| `NOM_ATTR_SCALE_SPECN_I16` | How to convert those samples to physical units |
-| `NOM_ATTR_TIME_PD_SAMP` | Sampling period, in monitor ticks |
-| `NOM_ATTR_VAL_ENUM_OBS` | An enumeration object's state |
-| `NOM_ATTR_AL_MON_P_AL_LIST` | Active *patient* alarms |
-| `NOM_ATTR_AL_MON_T_AL_LIST` | Active *technical* alarms |
+| Attribute                   | Meaning                                             |
+| --------------------------- | --------------------------------------------------- |
+| `NOM_ATTR_ID_HANDLE`        | The object's handle                                 |
+| `NOM_ATTR_ID_LABEL`         | *What* it measures, as a 32-bit physiological label |
+| `NOM_ATTR_ID_LABEL_STRING`  | The short display string, e.g. `"SpO2"`             |
+| `NOM_ATTR_UNIT_CODE`        | Unit of measure                                     |
+| `NOM_ATTR_NU_VAL_OBS`       | A numeric's observed value                          |
+| `NOM_ATTR_NU_CMPD_VAL_OBS`  | A *compound* numeric's values (see below)           |
+| `NOM_ATTR_SA_VAL_OBS`       | A waveform's block of samples                       |
+| `NOM_ATTR_SCALE_SPECN_I16`  | How to convert those samples to physical units      |
+| `NOM_ATTR_TIME_PD_SAMP`     | Sampling period, in monitor ticks                   |
+| `NOM_ATTR_VAL_ENUM_OBS`     | An enumeration object's state                       |
+| `NOM_ATTR_AL_MON_P_AL_LIST` | Active *patient* alarms                             |
+| `NOM_ATTR_AL_MON_T_AL_LIST` | Active *technical* alarms                           |
 
 :::{important}
 **Metadata is sent once.** Labels, units, sampling period and scaling appear in the

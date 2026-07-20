@@ -53,16 +53,16 @@ The request carries the client's **poll profile options**, a bit field stating w
 extensions it wants. This is the one point in the session where capability is
 negotiated, and getting it wrong is not recoverable without re-associating:
 
-| Option | Bit | Grants |
-|---|---|---|
-| `POLL_EXT_PERIOD_NU_1SEC` | `0x80000000` | 1-second numeric updates |
-| `POLL_EXT_PERIOD_NU_AVG_12SEC` | `0x40000000` | 12-second averaged numerics |
-| `POLL_EXT_PERIOD_NU_AVG_60SEC` | `0x20000000` | 60-second averaged numerics |
-| `POLL_EXT_PERIOD_NU_AVG_300SEC` | `0x10000000` | 300-second averaged numerics |
-| `POLL_EXT_PERIOD_RTSA` | `0x08000000` | Real-time sampled waveforms |
-| `POLL_EXT_ENUM` | `0x04000000` | Enumeration objects |
-| `POLL_EXT_NU_PRIO_LIST` | `0x02000000` | The numeric priority list |
-| `POLL_EXT_DYN_MODALITIES` | `0x01000000` | Dynamically appearing measurements |
+| Option                          | Bit          | Grants                             |
+| ------------------------------- | ------------ | ---------------------------------- |
+| `POLL_EXT_PERIOD_NU_1SEC`       | `0x80000000` | 1-second numeric updates           |
+| `POLL_EXT_PERIOD_NU_AVG_12SEC`  | `0x40000000` | 12-second averaged numerics        |
+| `POLL_EXT_PERIOD_NU_AVG_60SEC`  | `0x20000000` | 60-second averaged numerics        |
+| `POLL_EXT_PERIOD_NU_AVG_300SEC` | `0x10000000` | 300-second averaged numerics       |
+| `POLL_EXT_PERIOD_RTSA`          | `0x08000000` | Real-time sampled waveforms        |
+| `POLL_EXT_ENUM`                 | `0x04000000` | Enumeration objects                |
+| `POLL_EXT_NU_PRIO_LIST`         | `0x02000000` | The numeric priority list          |
+| `POLL_EXT_DYN_MODALITIES`       | `0x01000000` | Dynamically appearing measurements |
 
 `intellipy` sends `0x8F000000` by default — 1-second numerics, waveforms,
 enumerations, priority list and dynamic modalities — or `0x8B000000` when constructed
