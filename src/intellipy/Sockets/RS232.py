@@ -21,9 +21,12 @@ class RS232(Socket.Socket):
     ----------
     device: str
         Serial device name
+
+    timeout: float
+        Seconds to wait for serial input before giving up on a frame
     """
 
-    def __init__(self, device):
+    def __init__(self, device, timeout=5):
         super().__init__()
         # Create Serial Port
         try:
@@ -33,7 +36,7 @@ class RS232(Socket.Socket):
                 bytesize=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
-                timeout=5,
+                timeout=timeout,
             )
 
             # Create CRC16 Table
@@ -47,6 +50,19 @@ class RS232(Socket.Socket):
     def bind(self):
         """Binds port to given address (not used in serial)"""
         pass
+
+    def set_timeout(self, timeout):
+        """Bound how long `receive` waits for serial input.
+
+        Parameters
+        ----------
+        timeout: float or None
+            Seconds to wait, or None to block indefinitely.
+
+        """
+        self.timeout = timeout
+        if hasattr(self, "socket"):
+            self.socket.timeout = timeout
 
     def send(self, message):
         """Sends the finalized message to the monitor"""

@@ -21,9 +21,13 @@ class UDP(Socket.Socket):
     portNumber: int
         Data port number
 
+    timeout: float or None
+        Seconds to wait in `receive` before raising `socket.timeout`. None
+        (the default) blocks forever, as the original driver did.
+
     """
 
-    def __init__(self, portAddress="0.0.0.0", portNumber=24005):
+    def __init__(self, portAddress="0.0.0.0", portNumber=24005, timeout=None):
         super().__init__()
         # Create socket
         # AF_INET = Address and protocol family (internet)
@@ -38,6 +42,20 @@ class UDP(Socket.Socket):
 
         # Buffer Size (specified in manual p29)
         self.buffer_size = 2048
+
+        self.set_timeout(timeout)
+
+    def set_timeout(self, timeout):
+        """Bound how long `receive` blocks.
+
+        Parameters
+        ----------
+        timeout: float or None
+            Seconds to wait for a datagram, or None to block indefinitely.
+
+        """
+        self.timeout = timeout
+        self.socket.settimeout(timeout)
 
     def bind(self):
         """Binds port to given address"""
