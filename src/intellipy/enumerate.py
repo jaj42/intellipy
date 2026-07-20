@@ -8,14 +8,14 @@ attribute of every object of this class". The monitor answers with a possibly
 multi-packet ("linked") poll reply whose ``PollInfoList`` enumerates every
 object, and each object (``ObservationPoll``) carries at least:
 
-===========================  ======  =========================================
-attribute                    OID     meaning
-===========================  ======  =========================================
-``NOM_ATTR_ID_HANDLE``       0x0921  the handle you subscribe with
-``NOM_ATTR_ID_LABEL``        0x0924  32-bit physiological label id
-``NOM_ATTR_ID_LABEL_STRING`` 0x0927  short display string, e.g. ``"SpO2"``
-``NOM_ATTR_UNIT_CODE``       0x0996  unit of measure (numerics and waveforms)
-===========================  ======  =========================================
+============================  ======  ========================================
+attribute                     OID     meaning
+============================  ======  ========================================
+``NOM_ATTR_ID_HANDLE``        0x0921  the handle you subscribe with
+``NOM_ATTR_ID_LABEL``         0x0924  32-bit physiological label id
+``NOM_ATTR_ID_LABEL_STRING``  0x0927  short display string, e.g. ``"SpO2"``
+``NOM_ATTR_UNIT_CODE``        0x0996  unit of measure (numerics and waveforms)
+============================  ======  ========================================
 
 One class is polled per signal kind:
 

@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-docs = ["sphinx", "furo", "myst-parser"]
+docs = ["sphinx", "furo", "myst-parser", "sphinxcontrib-mermaid"]
 dev = ["pytest", "ruff"]
 
 [project.urls]
@@ -39,6 +39,7 @@ dev = ["pytest", "ruff"]
 
 [project.scripts]
 intellipy-enumerate = "intellipy.enumerate:main"
+intellipy-docs = "intellipy._docs:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/intellipy"]

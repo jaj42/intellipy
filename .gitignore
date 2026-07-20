@@ -17,8 +17,9 @@ dist/
 build/
 *.egg-info/
 
-# Docs build output
+# Docs build output (protocol tables are regenerated on every build)
 docs/_build/
+docs/protocol/_generated/
 
 # Virtual environments
 .venv/

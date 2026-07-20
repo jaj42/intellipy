@@ -12,9 +12,21 @@ not configure or control the monitor's clinical function.
 
 ## Status
 
-This project is being restructured into a modern packaged library. The protocol codec
-and connection drivers are working; packaging, a clean high-level client, live
-enumeration, examples, and documentation are in progress.
+This project is being restructured into a modern packaged library. The protocol codec,
+the high-level client, live enumeration, the example scripts and the documentation are
+in place; the test suite is being filled out.
+
+## Documentation
+
+```console
+uv sync --extra docs
+uv run intellipy-docs --serve      # builds, then serves on localhost:8000
+```
+
+The docs cover both the API and the protocol itself — a glossary and primer for MDS,
+RORS, extended polls and the 11073 nomenclature, guides for recording and real-time
+processing, and lookup tables generated from the package's own nomenclature files.
+They are published to GitHub Pages from `main` by `.github/workflows/docs.yml`.
 
 ## Layout
 
@@ -28,6 +40,12 @@ src/intellipy/                     the package (import name: intellipy)
   ConnectToIntellivueRS232.py      RS232 driver (legacy)
   Sockets/                         UDP / RS232 / base socket wrappers
   SaveProto.py                     queue-based save protocol example
+  client.py                        the supported high-level client
+  enumerate.py                     signal enumeration + `intellipy-enumerate` CLI
+  _docs.py                         `intellipy-docs` documentation build entry point
+docs/                              Sphinx sources (Furo + MyST)
+examples/                          record-to-file and real-time processing scripts
+tests/                             pytest suite; fixtures decode without hardware
 reference/                         a sample packet capture (offline decode fixture)
 ```
 
